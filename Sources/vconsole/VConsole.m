@@ -1,0 +1,116 @@
+#import "VConsoleCompat.h"
+#import "VConsole.h"
+
+// 持久化键在 Release 分支中也会被 VConsoleLogger / VConsoleController 引用，故放在条件编译之外
+NSString * const VConsoleDefaultsKeyThemeIndex = @"vcs.themeIndex";
+NSString * const VConsoleDefaultsKeyLevelFilter = @"vcs.levelFilter";
+NSString * const VConsoleDefaultsKeyNetworkEnabled = @"vcs.networkEnabled";
+NSString * const VConsoleDefaultsKeyFabX = @"vcs.fabX";
+NSString * const VConsoleDefaultsKeyFabY = @"vcs.fabY";
+NSString * const VConsoleDefaultsKeyPanelHeight = @"vcs.panelHeight";
+NSString * const VConsoleDefaultsKeyMockEnabled = @"vcs.mockEnabled";
+
+#ifdef DEBUG
+
+#import "VConsoleLogger.h"
+#import "VConsoleNetworkLogger.h"
+#import "VConsoleWebViewMonitor.h"
+#import "VConsoleController.h"
+#import "VConsoleFloatingButton.h"
+
+// 防重入：多次调用 attachToWindow: 只创建一个悬浮球
+// （stderr 捕获与网络开关本身幂等，无需额外保护）
+static BOOL gVConsoleFabAttached = NO;
+
+@implementation VConsole
+
++ (void)start {
+    UIWindow *window = [self vconsole_currentKeyWindow];
+    if (window) {
+        [self attachToWindow:window];
+    } else {
+        // 窗口尚未就绪（Scene 应用过早调用）：等首个 keyWindow 出现再挂载一次。
+        // 用 dispatch_once 语义的静态标记防止重复注册。
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(vconsole_windowDidBecomeKey:)
+                                                     name:UIWindowDidBecomeKeyNotification
+                                                   object:nil];
+    }
+}
+
+/// 首个 keyWindow 出现时挂载（仅 start 时序兜底路径触发）
++ (void)vconsole_windowDidBecomeKey:(NSNotification *)note {
+    UIWindow *window = note.object;
+    if ([window isKindOfClass:[UIWindow class]] && !gVConsoleFabAttached) {
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                        name:UIWindowDidBecomeKeyNotification
+                                                      object:nil];
+        [self attachToWindow:window];
+    }
+}
+
+/// 自动取当前可用于挂载的窗口：
+/// iOS 13+：前台激活的 UIWindowScene 中优先 keyWindow，否则取第一个 window（启动早期可能还没 keyWindow）；
+/// iOS 9~12：回退到 [UIApplication sharedApplication].keyWindow（该 API 在 13 已弃用）。
++ (nullable UIWindow *)vconsole_currentKeyWindow {
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if (scene.activationState != UISceneActivationStateForegroundActive) continue;
+            if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+            UIWindowScene *ws = (UIWindowScene *)scene;
+            for (UIWindow *w in ws.windows) {
+                if (w.isKeyWindow) return w;
+            }
+            return ws.windows.firstObject; // 启动早期回退
+        }
+        return nil;
+    }
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    return [UIApplication sharedApplication].keyWindow;
+    #pragma clang diagnostic pop
+}
+
++ (void)attachToWindow:(nullable UIWindow *)window {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults registerDefaults:@{VConsoleDefaultsKeyNetworkEnabled: @YES}];
+
+    // 网络抓包遵循上次设置（默认开启）
+    if ([defaults boolForKey:VConsoleDefaultsKeyNetworkEnabled]) {
+        [[VConsoleNetworkLogger shared] enable];
+    }
+    // WKWebView 网络监控（JS 钩子）跟随抓包开关启停，之后新建的 WebView 自动生效
+    [VConsoleWebViewMonitor attach];
+    [[VConsoleLogger shared] startCapturingStderr];
+
+    if (window && !gVConsoleFabAttached) {
+        gVConsoleFabAttached = YES;
+        VConsoleFloatingButton *fab = [[VConsoleFloatingButton alloc] initWithFrame:CGRectZero];
+        [fab showInWindow:window];
+        fab.tapHandler = ^{
+            [[VConsoleController shared] toggle];
+        };
+        [[VConsoleController shared] setFloatingButton:fab];
+    }
+}
+
++ (void)show { [[VConsoleController shared] show]; }
++ (void)hide { [[VConsoleController shared] hide]; }
++ (void)toggle { [[VConsoleController shared] toggle]; }
+
+@end
+
+#else
+
+// Release 构建：全部空实现，调试能力完全移除
+@implementation VConsole
+
++ (void)start {}
++ (void)attachToWindow:(nullable UIWindow *)window {}
++ (void)show {}
++ (void)hide {}
++ (void)toggle {}
+
+@end
+
+#endif

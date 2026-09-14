@@ -1,0 +1,22 @@
+# 构建产物
+build/
+DerivedData/
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# Xcode 用户数据
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# CocoaPods（本地验证产物）
+Pods/
+*.xcworkspace
+
+# macOS
+.DS_Store
+
+# 生成物（如需提交 xcodeproj 请删除下一行）
+# vsconsole.xcodeproj
