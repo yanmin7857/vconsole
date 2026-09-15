@@ -63,6 +63,12 @@ static NSString *const kDemoHTML =
 
 @implementation DemoWebViewController
 
+- (void)fireAllConsole {
+    if (self.webView) {
+        [self.webView evaluateJavaScript:@"fireAll()" completionHandler:nil];
+    }
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"WKWebView H5 控制台";

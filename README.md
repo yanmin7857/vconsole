@@ -2,6 +2,12 @@
 
 仿 H5 vConsole 的 iOS 原生调试面板（Objective-C）。一个悬浮球 + 四个面板（日志 / 网络 / 存储 / 系统）+ 内置本地 Mock，零业务侵入，仅 DEBUG 生效。
 
+<p align="center">
+  <img src="assets/demo.gif" width="320" alt="vconsole-ios 演示">
+  <br>
+  <sub>演示：原生日志分级着色 → WKWebView 内 H5 <code>console.*</code> 捕获（日志面板「· H5」前缀）</sub>
+</p>
+
 ## 特性
 
 **日志**
@@ -110,8 +116,8 @@ App 进程的 URL Loading System，这是 iOS 的系统级限制。vconsole 对�
 `XMLHttpRequest` / `fetch`），请求完成后经 `webkit.messageHandlers` 回传原生，
 与原生请求混排进网络面板，以青色 `· H5` 标记区分。同一脚本还会 hook
 `window.console` 的 `log/info/debug/warn/error`，H5 页面的控制台日志经 `vconsoleLog`
-通道回传，进入「日志」面板，以 `· H5` 前缀 + 级别色（info 绿 / warn 橙 / error 红）
-与原生日志区分，完整对标 Web 版 vConsole。
+通道回传，进入「日志」面板，以 `· H5` 前缀 + 级别色（verbose/普通黑、debug 蓝、
+info 灰、warn 橙、error 红）与原生日志区分，完整对标 Web 版 vConsole。
 
 - **业务零改动**：无需持有或配置 WebView，swizzle 初始化器自动注入
 - **捕获内容（网络）**：方法 / URL / 请求头 / 请求体 / 状态码 / 响应头 / 响应体 / 耗时
@@ -130,6 +136,10 @@ App 进程的 URL Loading System，这是 iOS 的系统级限制。vconsole 对�
 - **网络**：页面加载时已自动发出 fetch + XHR，回「网络」面板看青色 `· H5` 标记
 - **H5 控制台**：点「H5 Console 测试」下的 `console.log/info/debug/warn/error`（或
   「全部级别」「对象 / 数组」），回「日志」面板即可看到 `· H5` 前缀、按级别着色的记录
+
+> 演示动图重录：`xcrun simctl launch booted com.vconsole.ios -vcsDemo` 会按上述流程自动演示
+> 一遍（仅带该参数时触发，正常启动无任何自动行为），配合
+> `xcrun simctl io booted recordVideo demo.mp4` 即可重新录制。
 
 ## 本地 Mock
 

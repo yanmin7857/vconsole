@@ -1,6 +1,7 @@
 #import "VConsoleCompat.h"
 #import "DemoViewController.h"
 #import "DemoWebViewController.h"
+#import "VConsole.h"
 #import "VConsoleLogger.h"
 
 @interface DemoViewController ()
@@ -214,6 +215,46 @@
 /// 网络记录回「网络」面板（带 H5 标记），console.* 打印回「日志」面板（带「· H5」前缀）
 - (void)webDemo {
     [self.navigationController pushViewController:[[DemoWebViewController alloc] init] animated:YES];
+}
+
+#pragma mark - 自动演示（仅带 -vcsDemo 启动参数时触发，正常启动不受影响）
+
+// 用于生成 README 演示动图：xcrun simctl launch booted com.vconsole.ios -vcsDemo
+// 启动后会自动完成「打开面板 → 原生分级日志 → 进入 H5 测试页 → 触发 H5 console →
+// 回面板查看 · H5 记录」的完整流程，供录屏；正常手动启动不会自动跳转。
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self runDemoIfRequested];
+}
+
+- (void)runDemoIfRequested {
+    if (![[NSProcessInfo processInfo].arguments containsObject:@"-vcsDemo"]) return;
+
+    // 第一段：清空启动噪声 → 打印 5 条原生分级日志 → 展开面板查看
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [[VConsoleLogger shared] clear];
+        [self logDemo];
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [VConsole show]; });
+
+    // 第二段：收起面板 → 进入 H5 测试页 → 触发 H5 console.* → 展开面板查看「· H5」记录
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.8 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [VConsole hide]; });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.3 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [[VConsoleLogger shared] clear]; });
+
+    __block DemoWebViewController *wvc = nil;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.8 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        wvc = [[DemoWebViewController alloc] init];
+        [self.navigationController pushViewController:wvc animated:YES];
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(7.4 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [wvc fireAllConsole]; });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(9.4 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [VConsole show]; });
 }
 
 @end
