@@ -8,8 +8,30 @@
 
 @implementation AppDelegate
 
+#pragma mark - UIApplicationDelegate
+
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    // 窗口与 rootViewController 在 scene:willConnectToSession: 中创建，
+    // 必须 initWithWindowScene: 挂到系统分配的 UIWindowScene 上，否则 Scene 内 window
+    // 无 rootViewController，UIKit 会在 _runWithMainScene 断言崩溃。
+    return YES;
+}
+
+// iOS 13+ 多窗口/单窗口场景均由该方法提供 UISceneConfiguration，
+// delegate 类名取 Info.plist 中 UISceneConfigurations 的 Default 配置（即 AppDelegate 自身）。
+- (UISceneConfiguration *)application:(UIApplication *)application
+    configurationForConnectingSceneSession:(UISceneSession *)connectingSceneSession
+                                   options:(UISceneConnectionOptions *)options {
+    return [[UISceneConfiguration alloc] initWithName:@"Default"
+                                          sessionRole:connectingSceneSession.role];
+}
+
+#pragma mark - UIWindowSceneDelegate
+
+- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
+    UIWindowScene *windowScene = (UIWindowScene *)scene;
+    self.window = [[UIWindow alloc] initWithWindowScene:windowScene];
+
     DemoViewController *demo = [[DemoViewController alloc] init];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:demo];
     self.window.rootViewController = nav;
@@ -30,8 +52,6 @@
         else VConsoleLogI(@"[vconsole] 启动网络自检成功，返回 %lu 字节", (unsigned long)data.length);
     }] resume];
 #endif
-
-    return YES;
 }
 
 @end
