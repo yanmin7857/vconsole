@@ -9,13 +9,13 @@
 
 static UIColor *vconsoleColorForLevel(VConsoleLogLevel level) {
     switch (level) {
-        case VConsoleLogLevelVerbose: return [UIColor grayColor];
+        case VConsoleLogLevelVerbose: return [UIColor blackColor];
         case VConsoleLogLevelDebug:   return [UIColor colorWithRed:0.20 green:0.55 blue:0.90 alpha:1.0];
-        case VConsoleLogLevelInfo:    return [UIColor colorWithRed:0.10 green:0.72 blue:0.45 alpha:1.0];
+        case VConsoleLogLevelInfo:    return VConsoleGrayColor();
         case VConsoleLogLevelWarn:    return [UIColor colorWithRed:0.95 green:0.65 blue:0.15 alpha:1.0];
         case VConsoleLogLevelError:   return [UIColor colorWithRed:0.90 green:0.25 blue:0.25 alpha:1.0];
     }
-    return [UIColor grayColor];
+    return [UIColor blackColor];
 }
 
 /// 刷新合并窗口（秒）：高频日志（压测）时窗口内的多次变更只触发一次刷新，
