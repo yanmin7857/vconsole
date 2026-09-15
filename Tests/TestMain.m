@@ -239,7 +239,22 @@ static void testNetworkLoggerEmptyFilter(void) {
         @"\"status\":0,\"error\":\"Load failed\",\"duration\":12.3}"];
     [logger recordEntry:corsErr];
 
-    // 3) 正常有响应体的条目：应保留
+    // 3) 空接口（URL 为空）+ 空响应：应被过滤
+    //    复现旧版 H5 console 消息误入网络通道的形态：无 url / 无 status / 无 respBody
+    VConsoleNetworkEntry *blank = [VConsoleWebViewMonitor entryFromWebJSON:
+        @"{\"kind\":\"log\",\"level\":\"log\",\"text\":\"h5 日志误入网络通道\"}"];
+    VCTAssert(blank != nil, "EmptyFilter: 空接口 JSON 可解析出 entry");
+    [logger recordEntry:blank];
+
+    // 4) 空接口（URL 全空白）即使带响应体：也应被过滤
+    VConsoleNetworkEntry *blankWithBody = [[VConsoleNetworkEntry alloc] init];
+    blankWithBody.method = @"GET";
+    blankWithBody.url = @"   ";
+    blankWithBody.responseBody = @"should-not-appear";
+    blankWithBody.responseSize = 16;
+    [logger recordEntry:blankWithBody];
+
+    // 5) 正常有响应体的条目：应保留
     VConsoleNetworkEntry *ok = [[VConsoleNetworkEntry alloc] init];
     ok.method = @"GET";
     ok.url = @"https://api.example.com/ok";
@@ -256,6 +271,8 @@ static void testNetworkLoggerEmptyFilter(void) {
     VCTAssert([urls containsObject:@"https://api.example.com/ok"], "EmptyFilter: 有响应体的条目保留");
     VCTAssert(![urls containsObject:@"https://api.example.com/empty"], "EmptyFilter: 0字节空响应(原生)被过滤");
     VCTAssert(![urls containsObject:@"https://example.com/"], "EmptyFilter: 0字节空响应(跨域失败)被过滤");
+    VCTAssert(![urls containsObject:@""], "EmptyFilter: 空接口(URL 空)被过滤");
+    VCTAssert(![urls containsObject:@"   "], "EmptyFilter: 空接口(URL 全空白)被过滤");
     VCTAssert(entries.count == 1, "EmptyFilter: 仅保留 1 条有效条目");
 
     [logger clear];

@@ -303,8 +303,14 @@ didCompleteWithError:(NSError *)error {
 
 - (void)recordEntry:(VConsoleNetworkEntry *)entry {
     if (!entry) return;
-    // 过滤纯噪声：响应体为空且响应字节数为 0 的条目（即没拿到任何接口数据、又是 0 字节，
-    // 含跨域拦截等无数据的失败请求）不收录，避免网络面板被无意义条目刷屏。
+    // 过滤纯噪声条目，避免网络面板被无意义记录刷屏：
+    //  1) 空接口：URL 为空 / 全空白。JS 钩子回传的非网络消息（如旧版 console 误入
+    //     网络通道）没有 url 字段，会解析成 URL 空的记录，一律不收录；
+    //  2) 空响应：响应体为空且响应字节数为 0，即没拿到任何接口数据（含跨域拦截等
+    //     无数据的失败请求）。
+    NSString *trimmedURL = [entry.url stringByTrimmingCharactersInSet:
+                            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (trimmedURL.length == 0) return;
     BOOL hasResponse = (entry.responseSize > 0) || (entry.responseBody.length > 0);
     if (!hasResponse) return;
     dispatch_async(_queue, ^{
