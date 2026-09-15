@@ -3,6 +3,7 @@
 #import "DemoWebViewController.h"
 #import "VConsole.h"
 #import "VConsoleLogger.h"
+#import "VConsoleNetworkLogger.h"
 
 @interface DemoViewController ()
 @property (nonatomic, strong) UILabel *statusLabel;
@@ -220,8 +221,8 @@
 #pragma mark - 自动演示（仅带 -vcsDemo 启动参数时触发，正常启动不受影响）
 
 // 用于生成 README 演示动图：xcrun simctl launch booted com.vconsole.ios -vcsDemo
-// 启动后会自动完成「打开面板 → 原生分级日志 → 进入 H5 测试页 → 触发 H5 console →
-// 回面板查看 · H5 记录」的完整流程，供录屏；正常手动启动不会自动跳转。
+// 启动后自动完成「日志（原生分级）→ 网络 → 存储 → 系统 → H5 console 捕获」的完整流程，
+// 供录屏；正常手动启动不会有任何自动行为。
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     [self runDemoIfRequested];
@@ -230,31 +231,52 @@
 - (void)runDemoIfRequested {
     if (![[NSProcessInfo processInfo].arguments containsObject:@"-vcsDemo"]) return;
 
-    // 第一段：清空启动噪声 → 打印 5 条原生分级日志 → 展开面板查看
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [[VConsoleLogger shared] clear];
-        [self logDemo];
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ [VConsole show]; });
-
-    // 第二段：收起面板 → 进入 H5 测试页 → 触发 H5 console.* → 展开面板查看「· H5」记录
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.8 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ [VConsole hide]; });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.3 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ [[VConsoleLogger shared] clear]; });
+    // 时间轴（秒），用于生成 README 演示动图，四面板全覆盖。
+    // 首帧刻意延后到 2.0s：录制侧在 App 就绪后再开录，避免把 iOS 桌面录进动图。
+    //   2.0  清空启动噪声 + 发起真实网络请求（网络面板需要真实数据）
+    //   2.6  打印 5 条原生分级日志
+    //   3.2  展开面板 → 日志 Tab（原生分级着色）
+    //   6.2  切到 网络 Tab（真实请求 + JSON 美化）
+    //   9.0  切到 存储 Tab
+    //  10.8  切到 系统 Tab
+    //  12.6  收起面板
+    //  13.2  进入 WKWebView H5 测试页（页面加载自动发 fetch + XHR）
+    //  14.8  触发页面内 console.log/info/debug/warn/error
+    //  16.2  回面板 → 日志 Tab 看「· H5」记录
+    //  18.6  切到 网络 Tab 看 H5 请求记录
+    void (^at)(double, dispatch_block_t) = ^(double t, dispatch_block_t block) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(t * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), block);
+    };
 
     __block DemoWebViewController *wvc = nil;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.8 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
+
+    at(2.0, ^{
+        [[VConsoleLogger shared] clear];
+        [[VConsoleNetworkLogger shared] clear];
+        [self jsonNetworkDemo];
+        [self largeResponseDemo];
+    });
+    at(2.6, ^{ [self logDemo]; });
+    at(3.2, ^{
+        [VConsole show];
+        [VConsole selectPanelTab:VConsolePanelTabLog];
+    });
+    at(6.2, ^{ [VConsole selectPanelTab:VConsolePanelTabNetwork]; });
+    at(9.0, ^{ [VConsole selectPanelTab:VConsolePanelTabStorage]; });
+    at(10.8, ^{ [VConsole selectPanelTab:VConsolePanelTabSystem]; });
+    at(12.6, ^{ [VConsole hide]; });
+    at(13.2, ^{
+        [[VConsoleLogger shared] clear];
         wvc = [[DemoWebViewController alloc] init];
         [self.navigationController pushViewController:wvc animated:YES];
     });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(7.4 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ [wvc fireAllConsole]; });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(9.4 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ [VConsole show]; });
+    at(14.8, ^{ [wvc fireAllConsole]; });
+    at(16.2, ^{
+        [VConsole show];
+        [VConsole selectPanelTab:VConsolePanelTabLog];
+    });
+    at(18.6, ^{ [VConsole selectPanelTab:VConsolePanelTabNetwork]; });
 }
 
 @end

@@ -102,4 +102,10 @@
     else [self show];
 }
 
+- (void)selectPanelTab:(NSInteger)index {
+    // 触发 consoleWindow 懒加载，确保 panelVC 已创建（面板 VC 在 consoleWindow getter 中实例化）
+    (void)self.consoleWindow;
+    [self.panelVC selectTabAtIndex:index];
+}
+
 @end

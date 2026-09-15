@@ -403,6 +403,18 @@ static inline CGFloat VConsoleMinPanelHeight(CGFloat H) {
     [self updateTabSelectionAnimated:YES];
 }
 
+/// 编程式切换 Tab（对标 H5 vConsole 的 vConsole.showTab()）。
+/// 与手动点击走同一条路径（选中动画 + 角标清除），但不需要点击震动反馈。
+- (void)selectTabAtIndex:(NSInteger)index {
+    if (!self.isViewLoaded) [self loadViewIfNeeded];
+    if (index < 0 || index >= (NSInteger)self.tabs.count) return;
+    if (index == self.selectedTabIndex) {
+        [self refreshVisible];
+        return;
+    }
+    [self showTabAtIndex:index];
+}
+
 - (void)updateTabSelectionAnimated:(BOOL)animated {
     for (NSInteger i = 0; i < (NSInteger)self.tabButtons.count; i++) {
         UIButton *btn = self.tabButtons[i];

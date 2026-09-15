@@ -26,6 +26,14 @@ FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyFabY;            // double
 FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyPanelHeight;     // double: 面板高度占屏幕比例
 FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyMockEnabled;     // BOOL，默认 NO
 
+/// 调试面板的 Tab（对标 H5 vConsole 的 tab id）。
+typedef NS_ENUM(NSInteger, VConsolePanelTab) {
+    VConsolePanelTabLog = 0,      ///< 日志
+    VConsolePanelTabNetwork = 1,  ///< 网络
+    VConsolePanelTabStorage = 2,  ///< 存储
+    VConsolePanelTabSystem = 3,   ///< 系统
+};
+
 /// vConsole 统一入口。
 /// 最简接入（DEBUG 构建生效，Release 自动零开销）：
 ///     #import <VConsole/VConsole.h>
@@ -47,6 +55,11 @@ FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyMockEnabled;     // BOOL�
 + (void)show;
 + (void)hide;
 + (void)toggle;
+
+/// 切换到指定面板 Tab（对标 H5 vConsole 的 vConsole.showTab()）。
+/// 典型用途：自动化演示 / 回归测试里驱动面板，免去模拟点击。
+/// 仅切换 Tab，不改变面板显示状态——面板未打开时调用只会在下次打开时体现。
++ (void)selectPanelTab:(VConsolePanelTab)tab;
 
 @end
 

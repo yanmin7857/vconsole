@@ -97,6 +97,9 @@ static BOOL gVConsoleFabAttached = NO;
 + (void)show { [[VConsoleController shared] show]; }
 + (void)hide { [[VConsoleController shared] hide]; }
 + (void)toggle { [[VConsoleController shared] toggle]; }
++ (void)selectPanelTab:(VConsolePanelTab)tab {
+    [[VConsoleController shared] selectPanelTab:(NSInteger)tab];
+}
 
 @end
 
@@ -110,6 +113,7 @@ static BOOL gVConsoleFabAttached = NO;
 + (void)show {}
 + (void)hide {}
 + (void)toggle {}
++ (void)selectPanelTab:(VConsolePanelTab)tab {}
 
 @end
 

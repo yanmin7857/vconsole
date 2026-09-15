@@ -5,7 +5,8 @@
 <p align="center">
   <img src="assets/demo.gif" width="320" alt="vconsole-ios 演示">
   <br>
-  <sub>演示：原生日志分级着色 → WKWebView 内 H5 <code>console.*</code> 捕获（日志面板「· H5」前缀）</sub>
+  <sub>演示：日志（原生分级着色）→ 网络（真实请求 + JSON 美化）→ 存储 → 系统 →
+  WKWebView 内 H5 <code>console.*</code> 捕获（日志面板「· H5」前缀）→ H5 请求捕获（网络面板「· H5」标记）</sub>
 </p>
 
 ## 特性
@@ -88,6 +89,20 @@ VConsoleLogger.shared().log(VConsoleLogLevel.info, message: "hello from Swift",
                        file: #file, function: #function, line: #line)
 ```
 
+### 编程式控制面板
+
+对标 H5 vConsole 的 `vConsole.show()` / `vConsole.hide()` / `vConsole.showTab()`：
+
+```objc
+[VConsole show];
+[VConsole hide];
+[VConsole toggle];
+[VConsole selectPanelTab:VConsolePanelTabNetwork];   // 0 日志 / 1 网络 / 2 存储 / 3 系统
+```
+
+`selectPanelTab:` 只切换 Tab、不改变面板显示状态，典型用途是在自动化演示 / 回归测试里
+驱动面板，免去模拟点击（Demo 的 `-vcsDemo` 演示流程即基于它）。
+
 ### 关于 DEBUG 宏（CocoaPods 消费方必读）
 
 CocoaPods 默认**不会**把宿主 App 的 `DEBUG` 宏传入 Pod target（只注入 `COCAPODS=1`），
@@ -129,17 +144,25 @@ info 灰、warn 橙、error 红）与原生日志区分，完整对标 Web 版 v
 - **开关**：跟随「设置 → 网络抓包」，关闭后已注入的页面也不再记录网络与控制台日志
 - **限制**：`attachToWindow:` 之前已创建的 WebView、以及个别 Storyboard
   （`initWithCoder:`）实例不会被注入
-- **噪声过滤**：响应体为空且响应字节数为 0 的条目（即没拿到任何接口数据、又是 0 字节，
-  含跨域拦截等无数据的失败请求）不收录，避免网络面板被无意义条目刷屏
+- **噪声过滤**：两类纯噪声不收录——① URL 为空/全空白的「空接口」条目；② 响应体为空且
+  响应字节数为 0 的「空响应」条目（含跨域拦截等无数据的失败请求）。原生与 WebView 两条
+  链路统一在收录入口拦截，避免网络面板被无意义条目刷屏
 
 验证方式：运行 Demo → 主页「WKWebView H5 测试（网络 + Console）」→
 - **网络**：页面加载时已自动发出 fetch + XHR，回「网络」面板看青色 `· H5` 标记
 - **H5 控制台**：点「H5 Console 测试」下的 `console.log/info/debug/warn/error`（或
   「全部级别」「对象 / 数组」），回「日志」面板即可看到 `· H5` 前缀、按级别着色的记录
 
-> 演示动图重录：`xcrun simctl launch booted com.vconsole.ios -vcsDemo` 会按上述流程自动演示
-> 一遍（仅带该参数时触发，正常启动无任何自动行为），配合
-> `xcrun simctl io booted recordVideo demo.mp4` 即可重新录制。
+> 演示动图重录（`-vcsDemo`，仅带该参数时触发，正常启动无任何自动行为）：
+> ```bash
+> # 1) 先启动 App（让桌面→App 的过渡发生在录制之前，动图里就不会出现 iOS 桌面）
+> xcrun simctl launch booted com.vconsole.ios -vcsDemo
+> sleep 2.4
+> # 2) App 就绪后再开录；演示首帧刻意延后 2s，正好落在录制起点
+> xcrun simctl io booted recordVideo demo.mp4    # 录约 22s 后 Ctrl-C 停止
+> ```
+> 演示顺序：日志（原生分级）→ 网络（真实请求）→ 存储 → 系统 → H5 页面 →
+> H5 `console.*` 捕获 → H5 请求捕获，全程自动切 Tab，靠 `+selectPanelTab:` 驱动。
 
 ## 本地 Mock
 
