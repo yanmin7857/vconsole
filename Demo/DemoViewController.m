@@ -59,7 +59,7 @@
     [stack addArrangedSubview:[self buttonWithTitle:@"混合压力测试" action:@selector(stressDemo)]];
     [stack addArrangedSubview:[self buttonWithTitle:@"超长日志行" action:@selector(longLogDemo)]];
     [stack addArrangedSubview:[self buttonWithTitle:@"大响应体请求" action:@selector(largeResponseDemo)]];
-    [stack addArrangedSubview:[self buttonWithTitle:@"WKWebView 网络测试" action:@selector(webDemo)]];
+    [stack addArrangedSubview:[self buttonWithTitle:@"WKWebView H5 测试（网络 + Console）" action:@selector(webDemo)]];
     [stack addArrangedSubview:[self spacer]];
     [stack addArrangedSubview:_statusLabel];
 }
@@ -67,6 +67,7 @@
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     [self runE2EWebTestIfRequested];
+    [self runE2EConsoleTestIfRequested];
 }
 
 // 自动化端到端验证（脚本/CI 用，无 UI 依赖）：
@@ -95,6 +96,36 @@
                                                            options:NSJSONWritingPrettyPrinted error:nil];
             [data writeToFile:path atomically:YES];
             VConsoleLogI(@"[E2E] 网络记录快照已写入 %@（共 %lu 条）", path, (unsigned long)snapshot.count);
+        });
+    });
+}
+
+// 自动化端到端验证（脚本 / CI 用，无 UI 依赖）：
+//   xcrun simctl launch booted com.vconsole.ios -vcsE2EConsole
+// 启动后自动进入 WKWebView 测试页并触发全部级别 console.* 打印，
+// 5 秒后把日志面板中带「· H5」前缀的记录快照写入 tmp/vcs_e2e_console.json，
+// 宿主侧读取校验 H5 日志是否被 vConsole 捕获。
+- (void)runE2EConsoleTestIfRequested {
+    if (![[NSProcessInfo processInfo].arguments containsObject:@"-vcsE2EConsole"]) return;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self webDemo];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            NSArray<VConsoleLogEntry *> *entries = [[VConsoleLogger shared] allEntries];
+            NSMutableArray<NSDictionary *> *snapshot = [NSMutableArray array];
+            for (VConsoleLogEntry *e in entries) {
+                if ([e.message hasPrefix:@"· H5 "]) {
+                    [snapshot addObject:@{@"level": @(e.level),
+                                          @"levelName": e.levelName ?: @"",
+                                          @"message": e.message}];
+                }
+            }
+            NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"vcs_e2e_console.json"];
+            NSData *data = [NSJSONSerialization dataWithJSONObject:snapshot
+                                                           options:NSJSONWritingPrettyPrinted error:nil];
+            [data writeToFile:path atomically:YES];
+            VConsoleLogI(@"[E2E] H5 日志快照已写入 %@（共 %lu 条）", path, (unsigned long)snapshot.count);
         });
     });
 }
@@ -247,8 +278,8 @@
     VConsoleLogI(@"发起大响应 GET 请求: %@", url);
 }
 
-/// WKWebView 网络监控演示：页面加载即发出 fetch/XHR，
-/// 回控制台「网络」面板查看带 H5 标记的青色记录
+/// WKWebView H5 测试演示：页面含「网络监控」与「H5 Console 测试」两组入口，
+/// 网络记录回「网络」面板（带 H5 标记），console.* 打印回「日志」面板（带「· H5」前缀）
 - (void)webDemo {
     [self.navigationController pushViewController:[[DemoWebViewController alloc] init] animated:YES];
 }

@@ -124,8 +124,13 @@ App 进程的 URL Loading System，这是 iOS 的系统级限制。vconsole 对�
 - **限制**：`attachToWindow:` 之前已创建的 WebView、以及个别 Storyboard
   （`initWithCoder:`）实例不会被注入
 
-验证方式：运行 Demo →「WKWebView 网络测试」，页面加载时会自动发出 fetch + XHR，
-回控制台「网络」面板即可看到青色标记的记录。
+验证方式：运行 Demo → 主页「WKWebView H5 测试（网络 + Console）」→
+- **网络**：页面加载时已自动发出 fetch + XHR，回「网络」面板看青色 `· H5` 标记
+- **H5 控制台**：点「H5 Console 测试」下的 `console.log/info/debug/warn/error`（或
+  「全部级别」「对象 / 数组」），回「日志」面板即可看到 `· H5` 前缀、按级别着色的记录
+- **命令行 E2E**：`xcrun simctl launch booted com.vconsole.ios -vcsE2EConsole` 会自动
+  进入测试页并触发全部级别 console，约 6 秒后把带 `· H5` 前缀的日志快照写入
+  `tmp/vcs_e2e_console.json`，用于 CI / 真机回归校验 H5 日志是否被正确捕获
 
 ## 本地 Mock
 

@@ -121,7 +121,7 @@ static NSString *const sVConsoleHookJS =
     @"          else if (a == null) parts.push('' + a);"
     @"          else { try { parts.push(JSON.stringify(a)); } catch (e) { parts.push(String(a)); } }"
     @"        }"
-    @"        post({ kind: 'log', level: lv, text: parts.join(' ') });"
+    @"        try { window.webkit.messageHandlers.vconsoleLog.postMessage(JSON.stringify({ kind: 'log', level: lv, text: parts.join(' ') })); } catch (e) {}"
     @"      } catch (e) {}"
     @"      if (cOrig) { try { cOrig.apply(cv, arguments); } catch (e) {} }"
     @"    };"
