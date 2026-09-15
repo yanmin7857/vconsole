@@ -2,8 +2,6 @@
 #import "DemoViewController.h"
 #import "DemoWebViewController.h"
 #import "VConsoleLogger.h"
-#import "VConsoleNetworkLogger.h"
-#import "VConsoleNetworkEntry.h"
 
 @interface DemoViewController ()
 @property (nonatomic, strong) UILabel *statusLabel;
@@ -62,72 +60,6 @@
     [stack addArrangedSubview:[self buttonWithTitle:@"WKWebView H5 测试（网络 + Console）" action:@selector(webDemo)]];
     [stack addArrangedSubview:[self spacer]];
     [stack addArrangedSubview:_statusLabel];
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    [super viewDidAppear:animated];
-    [self runE2EWebTestIfRequested];
-    [self runE2EConsoleTestIfRequested];
-}
-
-// 自动化端到端验证（脚本/CI 用，无 UI 依赖）：
-//   xcrun simctl launch booted com.vconsole.ios -vcsE2EWeb
-// 启动后自动打开 WKWebView 测试页（页面加载即发 fetch + XHR），
-// 8 秒后把网络面板全部记录快照写入 tmp/vcs_e2e_web.json，
-// 宿主侧通过 get_app_container 读取校验 fromWeb 记录。
-- (void)runE2EWebTestIfRequested {
-    if (![[NSProcessInfo processInfo].arguments containsObject:@"-vcsE2EWeb"]) return;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self webDemo];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            NSArray<VConsoleNetworkEntry *> *entries = [[VConsoleNetworkLogger shared] entries];
-            NSMutableArray<NSDictionary *> *snapshot = [NSMutableArray array];
-            for (VConsoleNetworkEntry *e in entries) {
-                [snapshot addObject:@{@"method": e.method,
-                                      @"url": e.url,
-                                      @"status": [e statusText],
-                                      @"duration": [e durationText],
-                                      @"fromWeb": @(e.fromWeb)}];
-            }
-            NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"vcs_e2e_web.json"];
-            NSData *data = [NSJSONSerialization dataWithJSONObject:snapshot
-                                                           options:NSJSONWritingPrettyPrinted error:nil];
-            [data writeToFile:path atomically:YES];
-            VConsoleLogI(@"[E2E] 网络记录快照已写入 %@（共 %lu 条）", path, (unsigned long)snapshot.count);
-        });
-    });
-}
-
-// 自动化端到端验证（脚本 / CI 用，无 UI 依赖）：
-//   xcrun simctl launch booted com.vconsole.ios -vcsE2EConsole
-// 启动后自动进入 WKWebView 测试页并触发全部级别 console.* 打印，
-// 5 秒后把日志面板中带「· H5」前缀的记录快照写入 tmp/vcs_e2e_console.json，
-// 宿主侧读取校验 H5 日志是否被 vConsole 捕获。
-- (void)runE2EConsoleTestIfRequested {
-    if (![[NSProcessInfo processInfo].arguments containsObject:@"-vcsE2EConsole"]) return;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self webDemo];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            NSArray<VConsoleLogEntry *> *entries = [[VConsoleLogger shared] allEntries];
-            NSMutableArray<NSDictionary *> *snapshot = [NSMutableArray array];
-            for (VConsoleLogEntry *e in entries) {
-                if ([e.message hasPrefix:@"· H5 "]) {
-                    [snapshot addObject:@{@"level": @(e.level),
-                                          @"levelName": e.levelName ?: @"",
-                                          @"message": e.message}];
-                }
-            }
-            NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"vcs_e2e_console.json"];
-            NSData *data = [NSJSONSerialization dataWithJSONObject:snapshot
-                                                           options:NSJSONWritingPrettyPrinted error:nil];
-            [data writeToFile:path atomically:YES];
-            VConsoleLogI(@"[E2E] H5 日志快照已写入 %@（共 %lu 条）", path, (unsigned long)snapshot.count);
-        });
-    });
 }
 
 - (UIView *)spacer {
