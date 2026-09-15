@@ -8,6 +8,7 @@
 - `VConsoleLogV/D/I/W/E` 宏 + 自动捕获 `NSLog`/`fprintf`（自动剥离系统前缀）
 - 关键词搜索（防抖）、级别筛选 chips、长按复制、详情页文本内查找/分享
 - 上限 3000 条自动滚动淘汰；回到底部浮动按钮；未读 Error 角标
+- 日志文字配色（浅色面板下清晰可读）：verbose/普通日志 **黑色**、debug 蓝、info 灰、warn 橙、error 红
 
 **网络**
 - `NSURLProtocol` 拦截 App 内所有 `NSURLSession`/`NSURLConnection` 请求（含流式请求体 multipart）
@@ -35,7 +36,10 @@
 ### CocoaPods
 
 ```ruby
-pod 'VConsole', :path => '../vconsole-ios'   # 本地接入；发布后改为仓库地址
+# 已发布到 GitHub（推荐）：指定仓库地址 + 分支
+pod 'VConsole', :git => 'https://github.com/yanmin7857/vconsole.git', :branch => 'main'
+# 本地开发迭代时可改回本地路径：
+# pod 'VConsole', :path => '../vconsole-ios'
 ```
 
 ```objc
