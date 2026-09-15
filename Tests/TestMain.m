@@ -12,6 +12,7 @@
 #import "VConsoleMockCenter.h"
 #import "VConsoleStorageInspector.h"
 #import "VConsoleLogger.h"
+#import "VConsoleNetworkLogger.h"
 #import "VConsoleWebViewMonitor.h"
 
 static int g_failed = 0;
@@ -221,6 +222,45 @@ static void testLoggerLevelFilter(void) {
     [[VConsoleLogger shared] setLevelFilter:old];
 }
 
+static void testNetworkLoggerEmptyFilter(void) {
+    VConsoleNetworkLogger *logger = [VConsoleNetworkLogger shared];
+    [logger clear];
+    [NSThread sleepForTimeInterval:0.05];
+
+    // 1) 原生 0 字节 + 空响应体：应被过滤（没拿到任何接口数据、又是 0 字节）
+    VConsoleNetworkEntry *emptyNative = [[VConsoleNetworkEntry alloc] init];
+    emptyNative.method = @"GET";
+    emptyNative.url = @"https://api.example.com/empty";
+    [logger recordEntry:emptyNative];
+
+    // 2) WebView 跨域失败：status 0 + error、无响应体（responseSize 默认 0）：应被过滤
+    VConsoleNetworkEntry *corsErr = [VConsoleWebViewMonitor entryFromWebJSON:
+        @"{\"kind\":\"fetch\",\"method\":\"GET\",\"url\":\"https://example.com/\","
+        @"\"status\":0,\"error\":\"Load failed\",\"duration\":12.3}"];
+    [logger recordEntry:corsErr];
+
+    // 3) 正常有响应体的条目：应保留
+    VConsoleNetworkEntry *ok = [[VConsoleNetworkEntry alloc] init];
+    ok.method = @"GET";
+    ok.url = @"https://api.example.com/ok";
+    ok.statusCode = 200;
+    ok.responseBody = @"{\"code\":0}";
+    ok.responseSize = 11;
+    [logger recordEntry:ok];
+
+    [NSThread sleepForTimeInterval:0.05];
+    NSArray<VConsoleNetworkEntry *> *entries = [logger entries];
+    NSMutableSet<NSString *> *urls = [NSMutableSet set];
+    for (VConsoleNetworkEntry *e in entries) [urls addObject:e.url];
+
+    VCTAssert([urls containsObject:@"https://api.example.com/ok"], "EmptyFilter: 有响应体的条目保留");
+    VCTAssert(![urls containsObject:@"https://api.example.com/empty"], "EmptyFilter: 0字节空响应(原生)被过滤");
+    VCTAssert(![urls containsObject:@"https://example.com/"], "EmptyFilter: 0字节空响应(跨域失败)被过滤");
+    VCTAssert(entries.count == 1, "EmptyFilter: 仅保留 1 条有效条目");
+
+    [logger clear];
+}
+
 int main(int argc, char *argv[]) {
     @autoreleasepool {
         // simctl spawn 下 stdout 非 tty 为块缓冲，改为无缓冲便于实时观察进度
@@ -234,6 +274,7 @@ int main(int argc, char *argv[]) {
         testMockCenterLookup();
         testStorageInspector();
         testLoggerLevelFilter();
+        testNetworkLoggerEmptyFilter();
         printf("\n%d passed, %d failed\n", g_passed, g_failed);
         return (g_failed == 0) ? 0 : 1;
     }

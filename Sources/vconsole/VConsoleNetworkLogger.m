@@ -302,6 +302,11 @@ didCompleteWithError:(NSError *)error {
 }
 
 - (void)recordEntry:(VConsoleNetworkEntry *)entry {
+    if (!entry) return;
+    // 过滤纯噪声：响应体为空且响应字节数为 0 的条目（即没拿到任何接口数据、又是 0 字节，
+    // 含跨域拦截等无数据的失败请求）不收录，避免网络面板被无意义条目刷屏。
+    BOOL hasResponse = (entry.responseSize > 0) || (entry.responseBody.length > 0);
+    if (!hasResponse) return;
     dispatch_async(_queue, ^{
         entry.index = self.mutableEntries.count + 1;
         [self.mutableEntries addObject:entry];
