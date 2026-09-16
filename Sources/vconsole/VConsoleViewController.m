@@ -12,8 +12,8 @@
 #import "VConsoleLogEntry.h"
 #import "VConsoleNetworkEntry.h"
 
-static NSString * const kVConsoleTabTitles[] = { @"日志", @"网络", @"存储", @"系统", @"视图", @"性能" };
-static const NSInteger kVConsoleTabCount = 6;
+static NSString * const kVConsoleTabTitles[] = { @"日志", @"网络", @"存储", @"系统" };
+static const NSInteger kVConsoleTabCount = 4;
 
 /// 面板最小高度：比例下限与绝对下限取较大者。
 ///

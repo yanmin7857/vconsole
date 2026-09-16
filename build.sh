@@ -44,7 +44,7 @@ xcrun --sdk iphonesimulator clang \
   -I"$LIB_SRC" \
   $SRCS \
   -framework UIKit -framework Foundation -framework Photos -framework WebKit \
-  -framework CoreGraphics -framework QuartzCore \
+  -framework CoreGraphics -framework QuartzCore -framework Security -lSystem \
   -o "$APP/$APP_NAME" || { echo "!! 编译失败"; exit 1; }
 
 echo "==> 编译成功，生成可执行文件"
