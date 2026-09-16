@@ -40,6 +40,14 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
 @property (nonatomic, assign) NSInteger chipLevel;   // -1 = 全部
 @property (nonatomic, assign) BOOL refreshPending;
 @property (nonatomic, strong, nullable) dispatch_block_t searchDebounce;
+/// 搜索结果导航：上一个/下一个匹配 + 当前计数（搜索态显示在底部操作栏）
+@property (nonatomic, strong) UIButton *matchPrevButton;
+@property (nonatomic, strong) UIButton *matchNextButton;
+@property (nonatomic, strong) UILabel *matchCountLabel;
+/// 当前高亮的匹配项（在过滤后 self.entries 中的下标）；-1 表示无
+@property (nonatomic, assign) NSInteger currentMatchRow;
+/// 搜索词从空变非空时，下一次 refresh 后自动滚动到首条匹配
+@property (nonatomic, assign) BOOL scrollToCurrentOnNextUpdate;
 @property (nonatomic, strong) NSDateFormatter *timeFormatter;
 @end
 
@@ -120,6 +128,41 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
     _clearButton.accessibilityTraits = UIAccessibilityTraitButton;
     [bar addSubview:_clearButton];
 
+    // 搜索结果导航（上/下一个匹配）：搜索态显示在底部操作栏右侧
+    _matchPrevButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [_matchPrevButton setTitle:@"‹" forState:UIControlStateNormal];
+    _matchPrevButton.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+    _matchPrevButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [_matchPrevButton addTarget:self action:@selector(gotoMatchPrev) forControlEvents:UIControlEventTouchUpInside];
+    _matchPrevButton.hidden = YES;
+    _matchPrevButton.isAccessibilityElement = YES;
+    _matchPrevButton.accessibilityLabel = @"上一个匹配";
+    _matchPrevButton.accessibilityHint = @"轻点跳到上一条匹配结果";
+    _matchPrevButton.accessibilityTraits = UIAccessibilityTraitButton;
+    [self.view addSubview:_matchPrevButton];
+
+    _matchNextButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [_matchNextButton setTitle:@"›" forState:UIControlStateNormal];
+    _matchNextButton.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+    _matchNextButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [_matchNextButton addTarget:self action:@selector(gotoMatchNext) forControlEvents:UIControlEventTouchUpInside];
+    _matchNextButton.hidden = YES;
+    _matchNextButton.isAccessibilityElement = YES;
+    _matchNextButton.accessibilityLabel = @"下一个匹配";
+    _matchNextButton.accessibilityHint = @"轻点跳到下一条匹配结果";
+    _matchNextButton.accessibilityTraits = UIAccessibilityTraitButton;
+    [self.view addSubview:_matchNextButton];
+
+    _matchCountLabel = [[UILabel alloc] init];
+    _matchCountLabel.font = [UIFont systemFontOfSize:12];
+    _matchCountLabel.textColor = VConsoleSecondaryLabelColor();
+    _matchCountLabel.textAlignment = NSTextAlignmentCenter;
+    _matchCountLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _matchCountLabel.hidden = YES;
+    _matchCountLabel.isAccessibilityElement = YES;
+    _matchCountLabel.accessibilityLabel = @"匹配位置";
+    [self.view addSubview:_matchCountLabel];
+
     // 空态（覆盖在列表区域中央，不拦截点击）
     _emptyView = [[VConsoleEmptyStateView alloc] initWithSymbol:@"doc.text.magnifyingglass"
                                                       title:@"暂无日志"
@@ -176,6 +219,15 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
     [_scrollBottomButton.bottomAnchor constraintEqualToAnchor:_tableView.bottomAnchor constant:-12].active = YES;
     [_scrollBottomButton.widthAnchor constraintEqualToConstant:40].active = YES;
     [_scrollBottomButton.heightAnchor constraintEqualToConstant:40].active = YES;
+
+    // 搜索结果导航：底部操作栏右侧（清空按钮左侧）的 ‹ k/N ›
+    [_matchCountLabel.trailingAnchor constraintEqualToAnchor:_clearButton.leadingAnchor constant:-8].active = YES;
+    [_matchCountLabel.centerYAnchor constraintEqualToAnchor:bar.centerYAnchor].active = YES;
+    [_matchCountLabel.widthAnchor constraintGreaterThanOrEqualToConstant:42].active = YES;
+    [_matchNextButton.trailingAnchor constraintEqualToAnchor:_matchCountLabel.leadingAnchor constant:-2].active = YES;
+    [_matchNextButton.centerYAnchor constraintEqualToAnchor:bar.centerYAnchor].active = YES;
+    [_matchPrevButton.trailingAnchor constraintEqualToAnchor:_matchNextButton.leadingAnchor constant:-2].active = YES;
+    [_matchPrevButton.centerYAnchor constraintEqualToAnchor:bar.centerYAnchor].active = YES;
 
     [self buildChips];
 
@@ -330,6 +382,8 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
                           atScrollPosition:UITableViewScrollPositionBottom
                                   animated:NO];
     }
+
+    [self updateMatchNavigation];
 }
 
 - (void)updateEmptyState:(NSUInteger)totalCount {
@@ -406,6 +460,9 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
 
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
     self.searchText = searchText;
+    // 每次输入都从首条匹配重新开始导航；首次出现搜索词时滚动到首条
+    self.currentMatchRow = 0;
+    self.scrollToCurrentOnNextUpdate = (searchText.length > 0);
     // 有输入时才显示「取消」：空搜索框常驻一个取消按钮既占地方又无意义。
     // 之前从未设置过 showsCancelButton，导致下面的 searchBarCancelButtonClicked: 永不触发。
     searchBar.showsCancelButton = (searchText.length > 0);
@@ -431,6 +488,67 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
     [searchBar resignFirstResponder];
     [self refresh];
 }
+
+#pragma mark - 搜索结果导航
+
+- (void)updateMatchNavigation {
+    BOOL searching = (self.searchText.length > 0);
+    NSUInteger count = self.entries.count;
+    self.matchPrevButton.hidden = !searching;
+    self.matchNextButton.hidden = !searching;
+    self.matchCountLabel.hidden = !searching;
+    if (!searching || count == 0) {
+        self.currentMatchRow = -1;
+        self.scrollToCurrentOnNextUpdate = NO;
+        return;
+    }
+    if (self.currentMatchRow < 0 || self.currentMatchRow >= (NSInteger)count) {
+        self.currentMatchRow = 0;
+    }
+    self.matchCountLabel.text = [NSString stringWithFormat:@"%ld/%lu",
+                                 (long)(self.currentMatchRow + 1), (unsigned long)count];
+    self.matchPrevButton.enabled = (self.currentMatchRow > 0);
+    self.matchNextButton.enabled = (self.currentMatchRow < (NSInteger)count - 1);
+    if (self.scrollToCurrentOnNextUpdate) {
+        self.scrollToCurrentOnNextUpdate = NO;
+        [self scrollToCurrentMatchAnimated:NO];
+    } else if (self.currentMatchRow >= 0 && (NSUInteger)self.currentMatchRow < count) {
+        // 仅刷新当前行标记（不滚动），避免新日志到达时把浏览位置拉走
+        [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:self.currentMatchRow inSection:0]]
+                              withRowAnimation:UITableViewRowAnimationNone];
+    }
+}
+
+- (void)scrollToCurrentMatchAnimated:(BOOL)animated {
+    if (self.currentMatchRow < 0 || (NSUInteger)self.currentMatchRow >= self.entries.count) return;
+    NSIndexPath *ip = [NSIndexPath indexPathForRow:self.currentMatchRow inSection:0];
+    [self.tableView scrollToRowAtIndexPath:ip atScrollPosition:UITableViewScrollPositionMiddle animated:animated];
+    [self.tableView reloadRowsAtIndexPaths:@[ip] withRowAnimation:UITableViewRowAnimationNone];
+}
+
+- (void)gotoMatch:(NSInteger)delta {
+    if (self.searchText.length == 0 || self.entries.count == 0) return;
+    NSInteger count = (NSInteger)self.entries.count;
+    NSInteger next = (self.currentMatchRow < 0) ? 0 : MAX(0, MIN(count - 1, self.currentMatchRow + delta));
+    if (next == self.currentMatchRow) return;
+    NSInteger old = self.currentMatchRow;
+    self.currentMatchRow = next;
+    [self updateMatchNavigation];
+    // 旧行必须一并刷新：否则它残留的「当前匹配」标记会累积成多行高亮（实测踩过）
+    NSMutableArray<NSIndexPath *> *rows = [NSMutableArray array];
+    if (old >= 0 && old < count) [rows addObject:[NSIndexPath indexPathForRow:old inSection:0]];
+    [rows addObject:[NSIndexPath indexPathForRow:next inSection:0]];
+    [self.tableView reloadRowsAtIndexPaths:rows withRowAnimation:UITableViewRowAnimationNone];
+    VConsoleHapticLight();
+    [self scrollToCurrentMatchAnimated:YES];
+}
+
+- (void)gotoMatchNext { [self gotoMatch:1]; }
+- (void)gotoMatchPrev { [self gotoMatch:-1]; }
+
+/// 面板容器 ⌘G / ⇧⌘G 快捷键转发入口
+- (void)nextMatch { [self gotoMatchNext]; }
+- (void)prevMatch { [self gotoMatchPrev]; }
 
 #pragma mark - Table
 
@@ -485,6 +603,19 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
     cell.isAccessibilityElement = YES;
     cell.accessibilityLabel = [logA11y copy];
     cell.accessibilityHint = @"轻点查看详情";
+
+    // 搜索结果导航：当前匹配项加左侧橙色圆点 + 淡橙背景，与列表中其它命中（仅文本高亮）区分
+    if (self.searchText.length > 0 && self.currentMatchRow >= 0 && indexPath.row == self.currentMatchRow) {
+        UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 8, 8)];
+        dot.backgroundColor = VConsoleOrangeColor();
+        dot.layer.cornerRadius = 4;
+        cell.accessoryView = dot;
+        cell.contentView.backgroundColor = [VConsoleOrangeColor() colorWithAlphaComponent:0.12];
+    } else {
+        cell.accessoryView = nil;
+        cell.contentView.backgroundColor = [UIColor clearColor];
+    }
+
     return cell;
 }
 

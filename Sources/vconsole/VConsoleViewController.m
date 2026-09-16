@@ -862,6 +862,19 @@ static inline CGFloat VConsoleMinPanelHeight(CGFloat H) {
         find.discoverabilityTitle = @"搜索";
     }
     [cmds addObject:find];
+
+    // 搜索结果导航：⌘G 下一个匹配 / ⇧⌘G 上一个匹配（与详情页 find-in-page 一致）
+    UIKeyCommand *next = [UIKeyCommand keyCommandWithInput:@"g"
+                                             modifierFlags:UIKeyModifierCommand
+                                                    action:@selector(kbNextMatch)];
+    if (@available(iOS 13.0, *)) { next.title = @"下一个匹配"; } else { next.discoverabilityTitle = @"下一个匹配"; }
+    [cmds addObject:next];
+    UIKeyCommand *prev = [UIKeyCommand keyCommandWithInput:@"g"
+                                             modifierFlags:(UIKeyModifierCommand | UIKeyModifierShift)
+                                                    action:@selector(kbPrevMatch)];
+    if (@available(iOS 13.0, *)) { prev.title = @"上一个匹配"; } else { prev.discoverabilityTitle = @"上一个匹配"; }
+    [cmds addObject:prev];
+
     return cmds;
 }
 
@@ -877,6 +890,18 @@ static inline CGFloat VConsoleMinPanelHeight(CGFloat H) {
 - (void)kbFind {
     if ([self.currentTab respondsToSelector:@selector(focusSearch)]) {
         [(id)self.currentTab focusSearch];
+    }
+}
+
+- (void)kbNextMatch {
+    if ([self.currentTab respondsToSelector:@selector(nextMatch)]) {
+        [(id)self.currentTab nextMatch];
+    }
+}
+
+- (void)kbPrevMatch {
+    if ([self.currentTab respondsToSelector:@selector(prevMatch)]) {
+        [(id)self.currentTab prevMatch];
     }
 }
 
