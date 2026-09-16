@@ -22,8 +22,26 @@
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         instance = [[VConsoleController alloc] init];
+        // 多 window / Scene 增强：场景切换时把面板窗口重绑到激活场景，保持可见可交互
+        [[NSNotificationCenter defaultCenter] addObserver:instance
+                                                 selector:@selector(vconsole_sceneDidActivate:)
+                                                     name:UISceneDidActivateNotification
+                                                   object:nil];
     });
     return instance;
+}
+
+/// 场景激活切换时，把面板承载窗口(windowScene)重绑到新激活场景。
+- (void)vconsole_sceneDidActivate:(NSNotification *)note {
+    UIScene *scene = note.object;
+    if (![scene isKindOfClass:[UIWindowScene class]]) return;
+    if (@available(iOS 13.0, *)) {
+        if (!_consoleWindow) return; // 面板尚未创建则跳过（避免提前触发懒加载）
+        UIWindowScene *ws = (UIWindowScene *)scene;
+        if (_consoleWindow.windowScene != ws) {
+            _consoleWindow.windowScene = ws;
+        }
+    }
 }
 
 - (UIWindow *)consoleWindow {

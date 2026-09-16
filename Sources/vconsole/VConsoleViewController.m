@@ -12,7 +12,8 @@
 #import "VConsoleLogEntry.h"
 #import "VConsoleNetworkEntry.h"
 
-static NSString * const kVConsoleTabTitles[] = { @"日志", @"网络", @"存储", @"系统" };
+static NSString * const kVConsoleTabTitles[] = { @"日志", @"网络", @"存储", @"系统", @"视图", @"性能" };
+static const NSInteger kVConsoleTabCount = 6;
 
 /// 面板最小高度：比例下限与绝对下限取较大者。
 ///
@@ -295,7 +296,7 @@ static inline CGFloat VConsoleMinPanelHeight(CGFloat H) {
 
     NSMutableArray *buttons = [NSMutableArray array];
     NSMutableArray *badges = [NSMutableArray array];
-    for (NSInteger i = 0; i < 4; i++) {
+    for (NSInteger i = 0; i < kVConsoleTabCount; i++) {
         UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
         btn.tag = 100 + i;
         [btn setTitle:kVConsoleTabTitles[i] forState:UIControlStateNormal];
@@ -444,20 +445,20 @@ static inline CGFloat VConsoleMinPanelHeight(CGFloat H) {
 }
 
 - (void)updateBadges {
-    NSInteger counts[4] = {0, 0, 0, 0};
-    counts[0] = self.errorBadge;
-    counts[1] = self.netBadge;
-    for (NSInteger i = 0; i < 4; i++) {
+    for (NSInteger i = 0; i < kVConsoleTabCount; i++) {
+        NSInteger count = 0;
+        if (i == 0) count = self.errorBadge;       // 日志：未查看错误
+        else if (i == 1) count = self.netBadge;    // 网络：失败请求
         UILabel *badge = self.tabBadges[i];
-        if (counts[i] > 0) {
+        if (count > 0) {
             badge.hidden = NO;
-            badge.text = counts[i] > 99 ? @"99+" : [NSString stringWithFormat:@"%ld", (long)counts[i]];
+            badge.text = count > 99 ? @"99+" : [NSString stringWithFormat:@"%ld", (long)count];
         } else {
             badge.hidden = YES; // hidden 的视图 VoiceOver 自动跳过，无需额外处理
         }
         // 无障碍：说清"这个点是几条第几类"，而不是只念一个数字
-        badge.accessibilityLabel = [self badgeAccessibilityLabelAtIndex:i count:counts[i]];
-        self.tabButtons[i].accessibilityLabel = [self tabAccessibilityLabelAtIndex:i count:counts[i]];
+        badge.accessibilityLabel = [self badgeAccessibilityLabelAtIndex:i count:count];
+        self.tabButtons[i].accessibilityLabel = [self tabAccessibilityLabelAtIndex:i count:count];
     }
 }
 
@@ -470,7 +471,7 @@ static inline CGFloat VConsoleMinPanelHeight(CGFloat H) {
 
 /// Tab 的无障碍文案：无徽标时只报名字，有徽标时顺带说明徽标含义
 - (NSString *)tabAccessibilityLabelAtIndex:(NSInteger)index count:(NSInteger)count {
-    if (index < 0 || index >= 4) return @"";
+    if (index < 0 || index >= kVConsoleTabCount) return @"";
     NSString *title = kVConsoleTabTitles[index];
     if (count <= 0) return title;
     if (index == 0) return [NSString stringWithFormat:@"%@，%ld 条未查看错误", title, (long)count];
@@ -831,7 +832,7 @@ static inline CGFloat VConsoleMinPanelHeight(CGFloat H) {
 
 - (NSArray<UIKeyCommand *> *)keyCommands {
     NSMutableArray<UIKeyCommand *> *cmds = [NSMutableArray array];
-    for (NSInteger i = 0; i < 4; i++) {
+    for (NSInteger i = 0; i < kVConsoleTabCount; i++) {
         // iOS 13+ 用 title 属性替代已废弃的 discoverabilityTitle
         UIKeyCommand *cmd = [UIKeyCommand keyCommandWithInput:[NSString stringWithFormat:@"%ld", (long)(i + 1)]
                                                  modifierFlags:UIKeyModifierCommand

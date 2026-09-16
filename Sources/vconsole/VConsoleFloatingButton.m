@@ -145,6 +145,14 @@ static const CGFloat kVConsoleFabIdleAlpha = 0.45;
     [self resetIdleState];
 }
 
+- (void)rebindToScene:(nullable UIWindowScene *)scene {
+    if (@available(iOS 13.0, *)) {
+        if (!scene || !_fabWindow) return;
+        if (_fabWindow.windowScene == scene) return;
+        _fabWindow.windowScene = scene;
+    }
+}
+
 #pragma mark - Drag
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {

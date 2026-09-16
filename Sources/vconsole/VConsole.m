@@ -27,6 +27,9 @@ NSString * const VConsoleDefaultsKeyCrashEnabled = @"vcs.crashEnabled";
 // 防重入：多次调用 attachToWindow: 只创建一个悬浮球
 // （stderr 捕获与网络开关本身幂等，无需额外保护）
 static BOOL gVConsoleFabAttached = NO;
+// 多 window / Scene 增强：记录悬浮球实例，场景切换时重绑到激活场景
+static BOOL gVConsoleSceneObserved = NO;
+static __strong VConsoleFloatingButton *gVConsoleFab = nil;
 
 @implementation VConsole
 
@@ -108,6 +111,17 @@ static BOOL gVConsoleFabAttached = NO;
             [[VConsoleController shared] toggle];
         };
         [[VConsoleController shared] setFloatingButton:fab];
+        gVConsoleFab = fab;
+    }
+
+    // 多 window / Scene 增强：场景激活切换时，把悬浮球重绑到当前激活场景之上
+    // （iPad 多窗口 / Stage Manager 下，原场景进入后台后悬浮球会随之消失）。
+    if (!gVConsoleSceneObserved) {
+        gVConsoleSceneObserved = YES;
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(vconsole_sceneDidActivate:)
+                                                     name:UISceneDidActivateNotification
+                                                   object:nil];
     }
 }
 
@@ -159,6 +173,17 @@ static BOOL gVConsoleShakeSwizzled = NO;
     if (motion == UIEventSubtypeMotionShake &&
         [[NSUserDefaults standardUserDefaults] boolForKey:VConsoleDefaultsKeyShakeEnabled]) {
         [VConsole toggle];
+    }
+}
+
+#pragma mark - 多 window / Scene 增强
+
+/// 场景激活切换时，把悬浮球承载窗口重绑到新激活的 UIWindowScene。
++ (void)vconsole_sceneDidActivate:(NSNotification *)note {
+    UIScene *scene = note.object;
+    if (![scene isKindOfClass:[UIWindowScene class]]) return;
+    if (@available(iOS 13.0, *)) {
+        if (gVConsoleFab) [gVConsoleFab rebindToScene:(UIWindowScene *)scene];
     }
 }
 

@@ -16,6 +16,7 @@
 #import "VConsoleWebViewMonitor.h"
 #import "VConsoleRedactor.h"
 #import "VConsoleCrashReporter.h"
+#import "VConsoleMetrics.h"
 
 static int g_failed = 0;
 static int g_passed = 0;
@@ -325,6 +326,22 @@ static void testCrashReporter(void) {
     }
 }
 
+static void testMetrics(void) {
+    // 字节格式化
+    VCTAssert([VConsoleFormatBytes(0) isEqualToString:@"0 B"], "Metrics: 0 字节");
+    VCTAssert([VConsoleFormatBytes(512) isEqualToString:@"512 B"], "Metrics: B 级");
+    VCTAssert([VConsoleFormatBytes(2048) isEqualToString:@"2.0 KB"], "Metrics: KB 级");
+    VCTAssert([VConsoleFormatBytes(3LL * 1024 * 1024) isEqualToString:@"3.0 MB"], "Metrics: MB 级");
+    VCTAssert([VConsoleFormatBytes(2LL * 1024 * 1024 * 1024) isEqualToString:@"2.00 GB"], "Metrics: GB 级");
+    // 百分比格式化
+    VCTAssert([VConsoleFormatPercent(12.345) isEqualToString:@"12.3%"], "Metrics: 百分比一位小数");
+    // 运行时指标：mach 调用在本进程内可用，断言非负（!= -1 表示调用成功）
+    double mem = VConsoleAppMemoryMB();
+    VCTAssert(mem >= 0, "Metrics: 常驻内存可读取且 >= 0");
+    double cpu = VConsoleAppCPUUsage();
+    VCTAssert(cpu >= 0, "Metrics: CPU 占用可读取且 >= 0");
+}
+
 int main(int argc, char *argv[]) {
     @autoreleasepool {
         // simctl spawn 下 stdout 非 tty 为块缓冲，改为无缓冲便于实时观察进度
@@ -341,6 +358,7 @@ int main(int argc, char *argv[]) {
         testNetworkLoggerEmptyFilter();
         testRedactor();
         testCrashReporter();
+        testMetrics();
         printf("\n%d passed, %d failed\n", g_passed, g_failed);
         return (g_failed == 0) ? 0 : 1;
     }

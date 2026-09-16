@@ -31,10 +31,12 @@ FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyCrashEnabled;     // BOOL�
 
 /// 调试面板的 Tab（对标 H5 vConsole 的 tab id）。
 typedef NS_ENUM(NSInteger, VConsolePanelTab) {
-    VConsolePanelTabLog = 0,      ///< 日志
-    VConsolePanelTabNetwork = 1,  ///< 网络
-    VConsolePanelTabStorage = 2,  ///< 存储
-    VConsolePanelTabSystem = 3,   ///< 系统
+    VConsolePanelTabLog = 0,        ///< 日志
+    VConsolePanelTabNetwork = 1,    ///< 网络
+    VConsolePanelTabStorage = 2,    ///< 存储
+    VConsolePanelTabSystem = 3,     ///< 系统
+    VConsolePanelTabElement = 4,    ///< 视图树（UIView 层级检视）
+    VConsolePanelTabPerformance = 5,///< 性能（FPS / CPU / 内存）
 };
 
 /// vConsole 统一入口。

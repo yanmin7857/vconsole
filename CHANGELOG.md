@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0] - 2026-09-16
+
+### 新增
+- **P3 视图树面板（Element）**（`VConsoleElementViewController`，Tab「视图」）：递归检视当前 App 的 UIView 层级（对标 H5 vConsole 的 Element 面板）。逐节点展示类名 / frame / alpha / hidden / tag / 子视图数，支持点击展开/折叠，下拉刷新；自动过滤 vConsole 自身浮层窗口，只呈现业务视图。
+- **P3 性能面板（Performance）**（`VConsolePerformanceViewController`，Tab「性能」）：`CADisplayLink` 实时 FPS + 基于 `mach` 的 App CPU 占用与常驻内存，含 FPS 折线 sparkline 与颜色分级（≥50 绿 / 30~50 橙 / <30 红）。仅在面板可见时采样，切走即停，零常驻开销。
+- **P3 多 window / Scene 增强**：监听 `UISceneDidActivateNotification`，面板窗口（`VConsoleController.consoleWindow`）与悬浮球承载窗口自动重绑到当前激活的 `UIWindowScene`，iPad 多窗口 / Stage Manager 下调试入口不丢失。
+- 新增 `VConsoleMetrics` 指标模块（`VConsoleAppCPUUsage` / `VConsoleAppMemoryMB` / 字节与百分比格式化），供性能面板与单测复用。
+
+### 面板容器
+- `VConsolePanelTab` 枚举新增 `VConsolePanelTabElement = 4` / `VConsolePanelTabPerformance = 5`；Tab 数量由硬编码 4 解耦为常量 `kVConsoleTabCount = 6`，角标 / 键盘快捷键（⌘1~⌘6）/ 无障碍文案按 Tab 数动态适配。
+
+### 工程化
+- 单测新增 `testMetrics`（8 断言：字节/百分比格式化 + 运行时内存/CPU 可读取），共 80 项全过。
+- 测试脚本链接补 `-lSystem`，确保 mach 符号在模拟器中可解析。
+
 ## [1.1.0] - 2026-09-16
 
 ### 新增
