@@ -21,6 +21,7 @@ jobs:
           xcodebuild -scheme vconsole -configuration Debug
           -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator'
+          CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
           build
 
       - name: Run unit tests
