@@ -1,10 +1,19 @@
 #import "VConsoleCompat.h"
 #import "VConsoleNetworkEntry.h"
+#import "VConsoleRedactor.h"
 
 @implementation VConsoleNetworkEntry {
     // 列表滚动热点的展示文本缓存：字段在记录前已填充完毕，懒加载一次即可
     NSString *_durationTextCache;
     NSString *_statusTextCache;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _ttfbMs = -1; // 未统计
+    }
+    return self;
 }
 
 - (NSString *)durationText {
@@ -46,7 +55,8 @@ static NSString *vconsoleShellEscape(NSString *s) {
     if (self.requestBody.length > 0) {
         [s appendFormat:@" \\\n  --data-raw '%@'", vconsoleShellEscape(self.requestBody)];
     }
-    return s;
+    // 隐私脱敏：curl 中的 Authorization 等头也会被涂抹
+    return [VConsoleRedactor isEnabled] ? [VConsoleRedactor redact:s] : s;
 }
 
 @end

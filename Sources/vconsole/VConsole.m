@@ -9,6 +9,9 @@ NSString * const VConsoleDefaultsKeyFabX = @"vcs.fabX";
 NSString * const VConsoleDefaultsKeyFabY = @"vcs.fabY";
 NSString * const VConsoleDefaultsKeyPanelHeight = @"vcs.panelHeight";
 NSString * const VConsoleDefaultsKeyMockEnabled = @"vcs.mockEnabled";
+NSString * const VConsoleDefaultsKeyRedactionEnabled = @"vcs.redactionEnabled";
+NSString * const VConsoleDefaultsKeyShakeEnabled = @"vcs.shakeEnabled";
+NSString * const VConsoleDefaultsKeyCrashEnabled = @"vcs.crashEnabled";
 
 #ifdef DEBUG
 
@@ -17,6 +20,9 @@ NSString * const VConsoleDefaultsKeyMockEnabled = @"vcs.mockEnabled";
 #import "VConsoleWebViewMonitor.h"
 #import "VConsoleController.h"
 #import "VConsoleFloatingButton.h"
+#import "VConsoleCrashReporter.h"
+#import "VConsoleRedactor.h"
+#import <objc/runtime.h>
 
 // 防重入：多次调用 attachToWindow: 只创建一个悬浮球
 // （stderr 捕获与网络开关本身幂等，无需额外保护）
@@ -83,6 +89,17 @@ static BOOL gVConsoleFabAttached = NO;
     [VConsoleWebViewMonitor attach];
     [[VConsoleLogger shared] startCapturingStderr];
 
+    // 进阶能力：读取持久化开关并生效
+    [VConsoleRedactor setEnabled:[defaults boolForKey:VConsoleDefaultsKeyRedactionEnabled]];
+    [VConsoleCrashReporter setEnabled:[defaults boolForKey:VConsoleDefaultsKeyCrashEnabled]];
+    if ([defaults boolForKey:VConsoleDefaultsKeyCrashEnabled]) {
+        [VConsoleCrashReporter install];
+        [VConsoleCrashReporter replayLastCrashIfAny];
+    }
+    if ([defaults boolForKey:VConsoleDefaultsKeyShakeEnabled]) {
+        [self vconsole_installShake];
+    }
+
     if (window && !gVConsoleFabAttached) {
         gVConsoleFabAttached = YES;
         VConsoleFloatingButton *fab = [[VConsoleFloatingButton alloc] initWithFrame:CGRectZero];
@@ -99,6 +116,50 @@ static BOOL gVConsoleFabAttached = NO;
 + (void)toggle { [[VConsoleController shared] toggle]; }
 + (void)selectPanelTab:(VConsolePanelTab)tab {
     [[VConsoleController shared] selectPanelTab:(NSInteger)tab];
+}
+
+#pragma mark - 进阶能力开关
+
++ (void)setRedactionEnabled:(BOOL)enabled {
+    [VConsoleRedactor setEnabled:enabled];
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:VConsoleDefaultsKeyRedactionEnabled];
+}
+
++ (void)setCrashReportingEnabled:(BOOL)enabled {
+    [VConsoleCrashReporter setEnabled:enabled];
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:VConsoleDefaultsKeyCrashEnabled];
+    if (enabled) {
+        [VConsoleCrashReporter install];
+        [VConsoleCrashReporter replayLastCrashIfAny];
+    }
+}
+
++ (void)setShakeToToggleEnabled:(BOOL)enabled {
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:VConsoleDefaultsKeyShakeEnabled];
+    if (enabled) [self vconsole_installShake];
+}
+
+#pragma mark - 摇一摇唤起（swizzle UIWindow 的 motionEnded:）
+
+static BOOL gVConsoleShakeSwizzled = NO;
+
++ (void)vconsole_installShake {
+    if (gVConsoleShakeSwizzled) return;
+    gVConsoleShakeSwizzled = YES;
+    Class cls = [UIWindow class];
+    SEL original = @selector(motionEnded:withEvent:);
+    SEL swizzled = @selector(vconsole_motionEnded:withEvent:);
+    Method m1 = class_getInstanceMethod(cls, original);
+    Method m2 = class_getInstanceMethod(cls, swizzled);
+    if (m1 && m2) method_exchangeImplementations(m1, m2);
+}
+
+- (void)vconsole_motionEnded:(UIEventSubtype)motion withEvent:(UIEvent *)event {
+    [self vconsole_motionEnded:motion withEvent:event]; // 调回原实现
+    if (motion == UIEventSubtypeMotionShake &&
+        [[NSUserDefaults standardUserDefaults] boolForKey:VConsoleDefaultsKeyShakeEnabled]) {
+        [VConsole toggle];
+    }
 }
 
 @end

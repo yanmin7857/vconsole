@@ -189,6 +189,8 @@ static NSData *vconsoleReadBodyStream(NSInputStream *stream) {
         self.entry.statusCode = http.statusCode;
         self.entry.responseHeaders = http.allHeaderFields;
     }
+    // 首字节耗时 TTFB：请求发出（startTime）到收到首个响应头
+    self.entry.ttfbMs = [[NSDate date] timeIntervalSinceDate:self.startTime] * 1000.0;
     [self.client URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed];
     completionHandler(NSURLSessionResponseAllow);
 }

@@ -4,6 +4,7 @@
 #import "VConsoleNetworkEntry.h"
 #import "VConsoleDetailViewController.h"
 #import "VConsoleJSONFormatter.h"
+#import "VConsoleRedactor.h"
 #import "VConsoleUICommon.h"
 #import "VConsoleToast.h"
 
@@ -573,21 +574,49 @@ static const NSUInteger kVConsoleFoldMinLines = 40;
     [s appendFormat:@"URL: %@\n", e.url];
     [s appendFormat:@"状态码: %@\n", [e statusText]];
     [s appendFormat:@"耗时: %@\n", [e durationText]];
+    if (e.ttfbMs >= 0) {
+        [s appendFormat:@"首字节(TTFB): %.0f ms\n", e.ttfbMs];
+        // 时间轴条：TTFB 段 + 下载段，按比例绘制（共 24 格）
+        double total = e.durationMs > 0 ? e.durationMs : (e.ttfbMs > 0 ? e.ttfbMs : 1);
+        NSInteger ttfbCells = (NSInteger)round(24.0 * MAX(0, e.ttfbMs) / total);
+        ttfbCells = MAX(0, MIN(24, ttfbCells));
+        NSInteger dlCells = 24 - ttfbCells;
+        NSString *bar = [NSString stringWithFormat:@"%@%@",
+                         [@"█" stringByPaddingToLength:ttfbCells withString:@"█" startingAtIndex:0],
+                         [@"░" stringByPaddingToLength:dlCells withString:@"░" startingAtIndex:0]];
+        [s appendFormat:@"时间轴: [%@] TTFB %.0fms / 下载 %.0fms\n",
+         bar, e.ttfbMs, MAX(0, e.durationMs - e.ttfbMs)];
+    }
     [s appendFormat:@"响应大小: %lld B\n", (long long)e.responseSize];
     if (e.mocked) [s appendString:@"Mock: 是（本地数据，未发出真实请求）\n"];
     if (e.fromWeb) [s appendString:@"来源: WKWebView 页面 JS（fetch/XHR，经 JS 钩子回传）\n"];
     if (e.error) [s appendFormat:@"错误: %@\n", e.error];
+
+    // 隐私脱敏：展示前涂抹请求/响应头与体中敏感字段（默认开启）
+    BOOL redact = [VConsoleRedactor isEnabled];
     [s appendString:@"\n--- 请求头 ---\n"];
-    for (NSString *k in e.requestHeaders) [s appendFormat:@"%@: %@\n", k, e.requestHeaders[k]];
-    if (e.requestBody.length) [s appendFormat:@"\n--- 请求体 ---\n%@\n", e.requestBody];
+    for (NSString *k in e.requestHeaders) {
+        NSString *v = e.requestHeaders[k];
+        if (redact) v = [VConsoleRedactor redact:v];
+        [s appendFormat:@"%@: %@\n", k, v];
+    }
+    if (e.requestBody.length) {
+        NSString *body = redact ? [VConsoleRedactor redact:e.requestBody] : e.requestBody;
+        [s appendFormat:@"\n--- 请求体 ---\n%@\n", body];
+    }
     [s appendString:@"\n--- 响应头 ---\n"];
-    for (NSString *k in e.responseHeaders) [s appendFormat:@"%@: %@\n", k, e.responseHeaders[k]];
+    for (NSString *k in e.responseHeaders) {
+        NSString *v = e.responseHeaders[k];
+        if (redact) v = [VConsoleRedactor redact:v];
+        [s appendFormat:@"%@: %@\n", k, v];
+    }
     if (e.responseBody.length) {
         [s appendString:@"\n--- 响应体 ---\n"];
         // 完整版与折叠版都走同一套递归实现（foldDepth=0 表示不折叠），
         // 保证两者「不相等」只可能是真的折叠掉了内容，而不是两套美化器的排版差异，
         // 否则极小 JSON 也会误显示「展开全部」按钮。
         NSString *body = [VConsoleJSONFormatter prettyBodyIfJSON:e.responseBody maxDepth:foldDepth];
+        if (redact) body = [VConsoleRedactor redact:body];
         [s appendFormat:@"%@\n", body];
     }
     return s;

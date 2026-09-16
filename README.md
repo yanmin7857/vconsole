@@ -22,12 +22,15 @@
 - 记录方法/URL/请求头/请求体/状态码/耗时/响应头/响应体（JSON 自动美化，50k 字符截断，2MB 捕获上限）
 - 长按「复制 cURL 命令」（shell 转义，终端直接复现）、复制 URL/响应体/完整详情
 - 筛选 chips：全部 / 仅失败 / 慢请求 >1s；毫秒级开始时间戳
+- 详情页时间轴：TTFB（首字节耗时）+ 总耗时，分段时间轴条可视化
 - 内置 Mock：命中本地文件时不发真实请求，紫色标记，详见下文
 - WKWebView 监控：页面内 fetch/XHR 自动捕获（青色 `· H5` 标记），业务零改动，详见下文
 
 **存储**
 - UserDefaults 键值浏览 + 沙盒目录逐层导航（Documents / Library / tmp）
 - 文本文件预览（256KB 上限）、文件长按分享/删除、下拉刷新重新扫描
+- WebView 数据（只读）：WKWebsiteDataStore 的 Cookie（值脱敏）/ localStorage 站点
+- Keychain（只读）：通用密码条目属性（service/account/accessGroup），不取明文
 
 **系统**
 - 设备型号、系统版本、屏幕、内存、电量（实时监控）等信息
@@ -37,6 +40,20 @@
 - 面板：弹簧开合动画、grabber 拖拽调高（比例持久化）、Tab 角标
 - iPad：面板居中卡片布局 + 外接键盘快捷键（`Cmd+1~4` 切 Tab、`Esc` 关闭、`Cmd+F` 搜索）
 - 全局 toast/空态/触觉反馈；设置持久化（主题/级别过滤/抓包开关/Mock 开关）
+
+## 进阶能力
+
+**崩溃 / 异常 / 主线程卡顿捕获**（默认开启）
+- 捕获未捕获 Objective-C 异常、`SIGABRT/SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGTRAP` 信号、主线程无响应（>2s）三类问题，写入日志面板（崩溃 ERROR 级 / 卡顿 WARN 级）并落盘 `vconsole-last-crash.log`，App 重启后由 `replayLastCrashIfAny` 回填上次现场。
+- 关闭：`[VConsole setCrashReportingEnabled:NO]`
+
+**隐私脱敏**（默认开启）
+- 网络请求/响应与日志文本中的 `Authorization`、token、密码类键值、身份证号、银行卡号自动涂抹；可 `[VConsoleRedactor addCustomPattern:replacement:]` 追加规则，或 `[VConsole setRedactionEnabled:NO]` 关闭。
+
+**摇一摇唤起**
+- `[VConsole setShakeToToggleEnabled:YES]`（或设置页开关）后，摇动设备即可切换面板。
+
+> 注：以上能力仅在 DEBUG 构建生效；Release 构建 `VConsole` 全部为空实现，零运行时开销。
 
 ## 接入
 

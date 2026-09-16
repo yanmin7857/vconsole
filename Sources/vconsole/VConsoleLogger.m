@@ -1,6 +1,7 @@
 #import "VConsoleCompat.h"
 #import "VConsoleLogger.h"
 #import "VConsole.h"
+#import "VConsoleRedactor.h"
 
 NSString *const VConsoleLoggerDidAddEntryNotification = @"VConsoleLoggerDidAddEntryNotification";
 NSString *const VConsoleLoggerDidClearNotification = @"VConsoleLoggerDidClearNotification";
@@ -70,6 +71,10 @@ static NSString *vconsoleStripNSLogPrefix(NSString *line) {
        file:(const char *)file
    function:(const char *)function
        line:(int)line {
+    // 隐私脱敏：日志文本中的 token / 身份证 / 银行卡等敏感字段自动涂抹（默认开启）
+    if (message.length && [VConsoleRedactor isEnabled]) {
+        message = [VConsoleRedactor redact:message];
+    }
     VConsoleLogEntry *entry = [[VConsoleLogEntry alloc] initWithLevel:level message:message];
     if (file) {
         NSString *f = [NSString stringWithUTF8String:file];

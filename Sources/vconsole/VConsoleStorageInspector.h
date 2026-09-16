@@ -35,6 +35,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// 通用可读描述。
 + (NSString *)describeValue:(id)value;
 
+#pragma mark - WebView 数据（WKWebsiteDataStore）
+
+/// 异步抓取 WKWebView 的 Cookie 与 localStorage 站点（只读，不读取值内容）。
+/// 返回 items：
+///   cookie:      { kind:"cookie", name, domain, masked }  masked 为涂抹后的占位
+///   localStorage: { kind:"localStorage", host }          值不可经公开 API 读取，仅列站点
+- (void)fetchWebViewDataWithCompletion:(void (^)(NSArray<NSDictionary *> *items))completion;
+
+#pragma mark - Keychain（只读，不取明文）
+
+/// 同步读取通用密码类条目（kSecClassGenericPassword）的属性（service/account/accessGroup），
+/// 不取 kSecValueData（明文），返回 items：{ kind:"keychain", service, account, accessGroup }。
+- (NSArray<NSDictionary *> *)keychainItems;
+
 @end
 
 NS_ASSUME_NONNULL_END

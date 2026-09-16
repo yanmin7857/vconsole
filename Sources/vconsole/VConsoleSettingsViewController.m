@@ -4,13 +4,18 @@
 #import "VConsoleNetworkLogger.h"
 #import "VConsole.h"
 #import "VConsoleMockCenter.h"
+#import "VConsoleCrashReporter.h"
+#import "VConsoleRedactor.h"
 #import "VConsoleToast.h"
 #import "VConsoleUICommon.h"
 #import <Photos/Photos.h>
 
 /// 「功能」区行号：新增行时只改这两处，避免 cellForRow 与 didSelectRow 用魔数走偏
 static const NSInteger kVConsoleSettingsRowSlowThreshold = 4;  // 慢请求阈值
-static const NSInteger kVConsoleSettingsRowClearAll      = 5;  // 清空全部数据
+static const NSInteger kVConsoleSettingsRowCrash        = 5;  // 崩溃/异常捕获
+static const NSInteger kVConsoleSettingsRowRedaction    = 6;  // 隐私脱敏
+static const NSInteger kVConsoleSettingsRowShake        = 7;  // 摇一摇唤起
+static const NSInteger kVConsoleSettingsRowClearAll     = 8;  // 清空全部数据
 
 @interface VConsoleSettingsViewController () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, strong) UITableView *tableView;
@@ -75,7 +80,7 @@ static const NSInteger kVConsoleSettingsRowClearAll      = 5;  // 清空全部�
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) return 3;
     if (section == 1) return 5;
-    return 6; // 网络抓包 / Mock 数据 / 导出相册 / 导出日志文件 / 慢请求阈值 / 清空全部数据
+    return 9; // 网络抓包 / Mock / 导出相册 / 导出文件 / 慢请求阈值 / 崩溃捕获 / 隐私脱敏 / 摇一摇 / 清空全部数据
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
@@ -169,6 +174,30 @@ static const NSInteger kVConsoleSettingsRowClearAll      = 5;  // 清空全部�
             cell.accessibilityLabel = [NSString stringWithFormat:@"慢请求阈值，当前 %.0f 毫秒", VConsoleSlowRequestThresholdMs()];
             cell.accessibilityHint = @"轻点设置慢请求阈值";
             cell.accessibilityTraits = UIAccessibilityTraitButton;
+        } else if (indexPath.row == kVConsoleSettingsRowCrash) {
+            cell.textLabel.text = @"崩溃/异常捕获";
+            UISwitch *sw = [[UISwitch alloc] init];
+            sw.on = [VConsoleCrashReporter isEnabled];
+            [sw addTarget:self action:@selector(toggleCrash:) forControlEvents:UIControlEventValueChanged];
+            sw.isAccessibilityElement = YES;
+            sw.accessibilityHint = @"轻点开启或关闭崩溃/异常/卡顿捕获";
+            cell.accessoryView = sw;
+        } else if (indexPath.row == kVConsoleSettingsRowRedaction) {
+            cell.textLabel.text = @"隐私脱敏";
+            UISwitch *sw = [[UISwitch alloc] init];
+            sw.on = [VConsoleRedactor isEnabled];
+            [sw addTarget:self action:@selector(toggleRedaction:) forControlEvents:UIControlEventValueChanged];
+            sw.isAccessibilityElement = YES;
+            sw.accessibilityHint = @"轻点开启或关闭敏感字段涂抹";
+            cell.accessoryView = sw;
+        } else if (indexPath.row == kVConsoleSettingsRowShake) {
+            cell.textLabel.text = @"摇一摇唤起";
+            UISwitch *sw = [[UISwitch alloc] init];
+            sw.on = [[NSUserDefaults standardUserDefaults] boolForKey:VConsoleDefaultsKeyShakeEnabled];
+            [sw addTarget:self action:@selector(toggleShake:) forControlEvents:UIControlEventValueChanged];
+            sw.isAccessibilityElement = YES;
+            sw.accessibilityHint = @"轻点开启或关闭摇一摇切换面板";
+            cell.accessoryView = sw;
         } else {
             cell.textLabel.text = @"清空全部数据（日志+网络）";
             cell.textLabel.textColor = VConsoleRedColor();
@@ -201,6 +230,12 @@ static const NSInteger kVConsoleSettingsRowClearAll      = 5;  // 清空全部�
         [self exportLogAsFile];
     } else if (indexPath.row == kVConsoleSettingsRowSlowThreshold) {
         [self chooseSlowThreshold];
+    } else if (indexPath.row == kVConsoleSettingsRowCrash) {
+        [self toggleCrash:nil];
+    } else if (indexPath.row == kVConsoleSettingsRowRedaction) {
+        [self toggleRedaction:nil];
+    } else if (indexPath.row == kVConsoleSettingsRowShake) {
+        [self toggleShake:nil];
     } else if (indexPath.row == kVConsoleSettingsRowClearAll) {
         [self clearAllData];
     }
@@ -232,6 +267,27 @@ static const NSInteger kVConsoleSettingsRowClearAll      = 5;  // 清空全部�
     } else {
         VConsoleHapticLight();
     }
+}
+
+- (void)toggleCrash:(UISwitch *)sender {
+    BOOL on = sender ? sender.isOn : ![VConsoleCrashReporter isEnabled];
+    [VConsole setCrashReportingEnabled:on];
+    [self.tableView reloadData];
+    [self toast:on ? @"崩溃捕获已开启" : @"崩溃捕获已关闭"];
+}
+
+- (void)toggleRedaction:(UISwitch *)sender {
+    BOOL on = sender ? sender.isOn : ![VConsoleRedactor isEnabled];
+    [VConsole setRedactionEnabled:on];
+    [self.tableView reloadData];
+    [self toast:on ? @"隐私脱敏已开启" : @"隐私脱敏已关闭"];
+}
+
+- (void)toggleShake:(UISwitch *)sender {
+    BOOL on = sender ? sender.isOn : ![[NSUserDefaults standardUserDefaults] boolForKey:VConsoleDefaultsKeyShakeEnabled];
+    [VConsole setShakeToToggleEnabled:on];
+    [self.tableView reloadData];
+    [self toast:on ? @"摇一摇唤起已开启" : @"摇一摇唤起已关闭"];
 }
 
 #pragma mark - 导出相册

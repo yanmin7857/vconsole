@@ -39,6 +39,11 @@ static void VConsoleStorageRunOnMain(dispatch_block_t block) {
 @property (nonatomic, strong) NSArray<NSDictionary *> *allFileItems;
 @property (nonatomic, strong) NSArray<NSDictionary *> *defaultsItems; // 搜索过滤后
 @property (nonatomic, strong) NSArray<NSDictionary *> *fileItems;     // 搜索过滤后
+@property (nonatomic, strong) NSArray<NSString *> *sectionKinds;     // 四段固定顺序
+@property (nonatomic, strong) NSArray<NSDictionary *> *allWebViewItems;   // 过滤前
+@property (nonatomic, strong) NSArray<NSDictionary *> *allKeychainItems;  // 过滤前
+@property (nonatomic, strong) NSArray<NSDictionary *> *webViewItems;     // 搜索过滤后
+@property (nonatomic, strong) NSArray<NSDictionary *> *keychainItems;     // 搜索过滤后
 @property (nonatomic, strong) VConsoleEmptyStateView *emptyView;
 /// 目录导航栈（路径）。空 = 根层（Documents/Library/tmp）；非空 = 栈顶为当前目录。
 @property (nonatomic, strong) NSMutableArray<NSString *> *dirStack;
@@ -50,6 +55,8 @@ static void VConsoleStorageRunOnMain(dispatch_block_t block) {
     [super viewDidLoad];
     self.view.backgroundColor = VConsoleBackgroundColor();
     _dirStack = [NSMutableArray array];
+    // 四段顺序固定：WebView 数据 / Keychain / UserDefaults / 沙盒文件
+    self.sectionKinds = @[@"webview", @"keychain", @"ud", @"file"];
 
     if (@available(iOS 13.0, *)) {
         _searchField = [[UISearchTextField alloc] init];
@@ -147,13 +154,23 @@ static void VConsoleStorageRunOnMain(dispatch_block_t block) {
         // 根层显示三个沙盒目录入口；进入目录后非递归列举其内容
         NSArray *files = inRoot ? [[VConsoleStorageInspector shared] sandboxRootItems]
                                 : [[VConsoleStorageInspector shared] fileItemsInDirectory:currentDir];
+        // Keychain 只读，不取明文，后台同步读取
+        NSArray *keychain = [[VConsoleStorageInspector shared] keychainItems];
         dispatch_async(dispatch_get_main_queue(), ^{
             self.allDefaultsItems = defaults;
             self.allFileItems = files;
+            self.allKeychainItems = keychain;
             [self.tableView.refreshControl endRefreshing];
             [self applyFilter];
         });
     });
+    // WebView 数据（Cookie / localStorage）经 WKWebsiteDataStore 异步获取
+    [[VConsoleStorageInspector shared] fetchWebViewDataWithCompletion:^(NSArray<NSDictionary *> *items) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.allWebViewItems = items ?: @[];
+            [self applyFilter];
+        });
+    }];
 }
 
 - (void)refreshTriggered {
@@ -165,19 +182,26 @@ static void VConsoleStorageRunOnMain(dispatch_block_t block) {
     if (query.length == 0) {
         self.defaultsItems = self.allDefaultsItems;
         self.fileItems = self.allFileItems;
+        self.webViewItems = self.allWebViewItems;
+        self.keychainItems = self.allKeychainItems;
     } else {
         NSPredicate *p1 = [NSPredicate predicateWithFormat:@"key CONTAINS[c] %@", query];
         self.defaultsItems = [self.allDefaultsItems filteredArrayUsingPredicate:p1];
         NSPredicate *p2 = [NSPredicate predicateWithFormat:@"name CONTAINS[c] %@ OR path CONTAINS[c] %@", query, query];
         self.fileItems = [self.allFileItems filteredArrayUsingPredicate:p2];
+        NSPredicate *p3 = [NSPredicate predicateWithFormat:@"name CONTAINS[c] %@ OR domain CONTAINS[c] %@ OR host CONTAINS[c] %@", query, query, query];
+        self.webViewItems = [self.allWebViewItems filteredArrayUsingPredicate:p3];
+        NSPredicate *p4 = [NSPredicate predicateWithFormat:@"service CONTAINS[c] %@ OR account CONTAINS[c] %@ OR accessGroup CONTAINS[c] %@", query, query, query];
+        self.keychainItems = [self.allKeychainItems filteredArrayUsingPredicate:p4];
     }
     [self.tableView reloadData];
     [self updateEmptyState];
 }
 
 - (void)updateEmptyState {
-    // 两个 section 都为空才显示整体空态（避免覆盖 section 头）
-    BOOL allEmpty = (self.defaultsItems.count == 0 && self.fileItems.count == 0);
+    // 四个 section 都为空才显示整体空态（避免覆盖 section 头）
+    BOOL allEmpty = (self.defaultsItems.count == 0 && self.fileItems.count == 0
+                     && self.webViewItems.count == 0 && self.keychainItems.count == 0);
     self.emptyView.hidden = !allEmpty;
     if (!allEmpty) return;
     if (self.searchField.text.length > 0) {
@@ -186,19 +210,27 @@ static void VConsoleStorageRunOnMain(dispatch_block_t block) {
                                subtitle:@"换个关键词试试"];
     } else {
         [self.emptyView configureSymbol:@"externaldrive"
-                                  title:@"沙盒为空"
+                                  title:@"暂无数据"
                                subtitle:@"下拉可重新扫描"];
     }
 }
 
 #pragma mark - Table
 
+- (NSString *)vcs_kindForSection:(NSInteger)section {
+    if (section >= 0 && (NSUInteger)section < self.sectionKinds.count) return self.sectionKinds[section];
+    return @"file";
+}
+
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 2;
+    return 4;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    if (section == 0) return @"UserDefaults";
+    NSString *kind = [self vcs_kindForSection:section];
+    if ([kind isEqualToString:@"webview"]) return @"WebView 数据（Cookie / localStorage，只读）";
+    if ([kind isEqualToString:@"keychain"]) return @"Keychain（通用密码，只读）";
+    if ([kind isEqualToString:@"ud"]) return @"UserDefaults";
     if (self.dirStack.count == 0) return @"沙盒目录（点目录进入浏览）";
     return [NSString stringWithFormat:@"当前目录: %@",
             [self.dirStack.lastObject stringByReplacingOccurrencesOfString:NSHomeDirectory()
@@ -211,7 +243,10 @@ static void VConsoleStorageRunOnMain(dispatch_block_t block) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section == 0) return self.defaultsItems.count;
+    NSString *kind = [self vcs_kindForSection:section];
+    if ([kind isEqualToString:@"webview"]) return self.webViewItems.count;
+    if ([kind isEqualToString:@"keychain"]) return self.keychainItems.count;
+    if ([kind isEqualToString:@"ud"]) return self.defaultsItems.count;
     return self.fileItems.count + ([self hasParentRow] ? 1 : 0);
 }
 
@@ -226,7 +261,35 @@ static void VConsoleStorageRunOnMain(dispatch_block_t block) {
     // 存储页文本跟随系统字号；必须每次重设，否则复用池里的旧 cell 会带着旧字号
     cell.textLabel.font = VConsoleScaledFont(13, UIFontWeightRegular);
     cell.detailTextLabel.font = VConsoleScaledFont(11, UIFontWeightRegular);
-    if (indexPath.section == 0) {
+    NSString *kind = [self vcs_kindForSection:indexPath.section];
+    if ([kind isEqualToString:@"webview"]) {
+        NSDictionary *d = self.webViewItems[indexPath.row];
+        BOOL isCookie = [d[@"kind"] isEqualToString:@"cookie"];
+        cell.textLabel.text = isCookie ? d[@"name"] : [NSString stringWithFormat:@"localStorage · %@", d[@"host"]];
+        cell.detailTextLabel.text = isCookie
+            ? [NSString stringWithFormat:@"%@  %@", d[@"domain"], d[@"masked"]]
+            : @"站点（值不可经公开 API 读取）";
+        cell.imageView.image = VConsoleImageNamed(@"globe");
+        cell.imageView.tintColor = VConsoleSecondaryLabelColor();
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        cell.isAccessibilityElement = YES;
+        cell.accessibilityLabel = cell.textLabel.text;
+        cell.accessibilityHint = @"轻点查看详情";
+        return cell;
+    }
+    if ([kind isEqualToString:@"keychain"]) {
+        NSDictionary *d = self.keychainItems[indexPath.row];
+        cell.textLabel.text = d[@"service"];
+        cell.detailTextLabel.text = [NSString stringWithFormat:@"account: %@", d[@"account"]];
+        cell.imageView.image = VConsoleImageNamed(@"lock.fill");
+        cell.imageView.tintColor = VConsoleSecondaryLabelColor();
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        cell.isAccessibilityElement = YES;
+        cell.accessibilityLabel = [NSString stringWithFormat:@"Keychain %@，account %@", d[@"service"], d[@"account"]];
+        cell.accessibilityHint = @"轻点查看详情（明文不读取）";
+        return cell;
+    }
+    if ([kind isEqualToString:@"ud"]) {
         NSDictionary *d = self.defaultsItems[indexPath.row];
         cell.textLabel.text = d[@"key"];
         cell.detailTextLabel.text = d[@"value"];
@@ -274,7 +337,25 @@ static void VConsoleStorageRunOnMain(dispatch_block_t block) {
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    if (indexPath.section == 0) {
+    NSString *kind = [self vcs_kindForSection:indexPath.section];
+    if ([kind isEqualToString:@"webview"]) {
+        NSDictionary *d = self.webViewItems[indexPath.row];
+        BOOL isCookie = [d[@"kind"] isEqualToString:@"cookie"];
+        NSString *detail = isCookie
+            ? [NSString stringWithFormat:@"名称: %@\n域名: %@\n值: %@（已脱敏，调试时可到 Safari/Charles 查看明文）",
+               d[@"name"], d[@"domain"], d[@"masked"]]
+            : [NSString stringWithFormat:@"localStorage 站点: %@\n（WKWebView 的 localStorage 值不可经公开 API 读取，仅能列出站点）", d[@"host"]];
+        [self presentDetailWithTitle:isCookie ? d[@"name"] : @"localStorage" detail:detail];
+        return;
+    }
+    if ([kind isEqualToString:@"keychain"]) {
+        NSDictionary *d = self.keychainItems[indexPath.row];
+        NSString *detail = [NSString stringWithFormat:@"服务: %@\n账户: %@\n访问组: %@\n\n（出于安全，vConsole 不读取明文数据）",
+                             d[@"service"], d[@"account"], d[@"accessGroup"]];
+        [self presentDetailWithTitle:d[@"service"] detail:detail];
+        return;
+    }
+    if ([kind isEqualToString:@"ud"]) {
         NSDictionary *d = self.defaultsItems[indexPath.row];
         NSString *detail = [NSString stringWithFormat:@"%@ =\n%@", d[@"key"], d[@"raw"]];
         [self presentDetailWithTitle:d[@"key"] detail:detail];
@@ -538,11 +619,13 @@ static void VConsoleStorageRunOnMain(dispatch_block_t block) {
     contextMenuConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath
                                        point:(CGPoint)point {
     if (@available(iOS 13.0, *)) {
-    // section 0 = UserDefaults（复制键/复制值/编辑值/删除键），section 1 = 文件（分享/删除）
-    if (indexPath.section == 0) {
+    // 仅 UserDefaults（复制键/复制值/编辑值/删除键）与沙盒文件（分享/删除）提供长按菜单；
+    // WebView 数据 / Keychain 为只读，不提供编辑菜单。
+    NSString *kind = [self vcs_kindForSection:indexPath.section];
+    if ([kind isEqualToString:@"ud"]) {
         return [self defaultsMenuConfigurationForRow:indexPath.row];
     }
-    if (indexPath.section != 1) return nil;
+    if (![kind isEqualToString:@"file"]) return nil;
     if ([self hasParentRow] && indexPath.row == 0) return nil;
     NSDictionary *f = self.fileItems[indexPath.row - ([self hasParentRow] ? 1 : 0)];
     if ([f[@"isDir"] boolValue]) return nil;

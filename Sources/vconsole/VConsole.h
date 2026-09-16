@@ -25,6 +25,9 @@ FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyFabX;            // double
 FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyFabY;            // double: 悬浮球中心 Y
 FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyPanelHeight;     // double: 面板高度占屏幕比例
 FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyMockEnabled;     // BOOL，默认 NO
+FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyRedactionEnabled; // BOOL，默认 YES（隐私脱敏）
+FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyShakeEnabled;     // BOOL，默认 NO（摇一摇唤起）
+FOUNDATION_EXPORT NSString * const VConsoleDefaultsKeyCrashEnabled;     // BOOL，默认 YES（崩溃捕获）
 
 /// 调试面板的 Tab（对标 H5 vConsole 的 tab id）。
 typedef NS_ENUM(NSInteger, VConsolePanelTab) {
@@ -60,6 +63,15 @@ typedef NS_ENUM(NSInteger, VConsolePanelTab) {
 /// 典型用途：自动化演示 / 回归测试里驱动面板，免去模拟点击。
 /// 仅切换 Tab，不改变面板显示状态——面板未打开时调用只会在下次打开时体现。
 + (void)selectPanelTab:(VConsolePanelTab)tab;
+
+#pragma mark - 进阶能力开关
+
+/// 隐私脱敏：网络/日志中的 token、身份证、银行卡等敏感字段自动涂抹（默认开启）。
++ (void)setRedactionEnabled:(BOOL)enabled;
+/// 全局崩溃/异常/主线程卡顿捕获（默认开启，仅 DEBUG 生效）。
++ (void)setCrashReportingEnabled:(BOOL)enabled;
+/// 摇一摇唤起/收起面板（默认关闭）。开启后在任意可响应摇动的 window 上摇动设备即可切换面板。
++ (void)setShakeToToggleEnabled:(BOOL)enabled;
 
 @end
 

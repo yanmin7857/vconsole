@@ -16,6 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) NSTimeInterval durationMs;
 @property (nonatomic, assign) NSInteger responseSize;
 @property (nonatomic, copy, nullable) NSString *responseBody;
+/// 首字节耗时（TTFB，毫秒）：从请求发出到收到首个响应头。-1 表示未统计。
+@property (nonatomic, assign) NSTimeInterval ttfbMs;
 @property (nonatomic, copy, nullable) NSString *error;
 /// 是否由本地 Mock 返回（未发出真实网络请求）
 @property (nonatomic, assign) BOOL mocked;

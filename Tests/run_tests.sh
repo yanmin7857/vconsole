@@ -36,7 +36,7 @@ xcrun --sdk iphonesimulator clang \
   -isysroot "$SIM_SDK" \
   $SRCS \
   -framework UIKit -framework Foundation -framework Photos -framework WebKit \
-  -framework CoreGraphics -framework QuartzCore \
+  -framework CoreGraphics -framework QuartzCore -framework Security \
   -o "$OUT/vcs_tests" || { echo "!! 编译失败"; exit 1; }
 
 echo "==> 运行测试..."

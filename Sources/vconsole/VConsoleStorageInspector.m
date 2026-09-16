@@ -1,5 +1,7 @@
 #import "VConsoleCompat.h"
 #import "VConsoleStorageInspector.h"
+#import <WebKit/WebKit.h>
+#import <Security/Security.h>
 
 @implementation VConsoleStorageInspector
 
@@ -141,6 +143,55 @@
         return [NSString stringWithFormat:@"<Data %lu bytes>", (unsigned long)[(NSData *)value length]];
     }
     return [value description];
+}
+
+#pragma mark - WebView 数据
+
+- (void)fetchWebViewDataWithCompletion:(void (^)(NSArray<NSDictionary *> *items))completion {
+    NSMutableArray *items = [NSMutableArray array];
+    WKWebsiteDataStore *store = [WKWebsiteDataStore defaultDataStore];
+    [store.httpCookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *cookies) {
+        for (NSHTTPCookie *c in cookies) {
+            [items addObject:@{@"kind": @"cookie",
+                               @"name": c.name ?: @"",
+                               @"domain": c.domain ?: @"",
+                               @"masked": @"<redacted>"}];
+        }
+        [store fetchDataRecordsOfTypes:[NSSet setWithObject:WKWebsiteDataTypeLocalStorage]
+                      completionHandler:^(NSArray<WKWebsiteDataRecord *> *records) {
+            for (WKWebsiteDataRecord *r in records) {
+                [items addObject:@{@"kind": @"localStorage", @"host": r.displayName ?: @""}];
+            }
+            if (completion) completion([items copy]);
+        }];
+    }];
+}
+
+#pragma mark - Keychain
+
+- (NSArray<NSDictionary *> *)keychainItems {
+    NSMutableArray *items = [NSMutableArray array];
+    NSDictionary *query = @{
+        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecReturnAttributes: @YES,
+        (__bridge id)kSecMatchLimit: (__bridge id)kSecMatchLimitAll,
+    };
+    CFTypeRef result = NULL;
+    OSStatus st = SecItemCopyMatching((__bridge CFDictionaryRef)query, &result);
+    if (st == errSecSuccess && result) {
+        NSArray *arr = (__bridge_transfer NSArray *)result;
+        for (NSDictionary *d in arr) {
+            if (![d isKindOfClass:[NSDictionary class]]) continue;
+            [items addObject:@{
+                @"kind": @"keychain",
+                @"service": (d[(__bridge id)kSecAttrService] ?: @""),
+                @"account": (d[(__bridge id)kSecAttrAccount] ?: @""),
+                @"accessGroup": (d[(__bridge id)kSecAttrAccessGroup] ?: @""),
+            }];
+        }
+        if (items.count > 200) [items removeObjectsInRange:NSMakeRange(200, items.count - 200)];
+    }
+    return [items copy];
 }
 
 @end

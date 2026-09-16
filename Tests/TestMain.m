@@ -14,6 +14,8 @@
 #import "VConsoleLogger.h"
 #import "VConsoleNetworkLogger.h"
 #import "VConsoleWebViewMonitor.h"
+#import "VConsoleRedactor.h"
+#import "VConsoleCrashReporter.h"
 
 static int g_failed = 0;
 static int g_passed = 0;
@@ -278,6 +280,51 @@ static void testNetworkLoggerEmptyFilter(void) {
     [logger clear];
 }
 
+static void testRedactor(void) {
+    [VConsoleRedactor setEnabled:YES];
+
+    // Authorization 请求头整行涂抹
+    NSString *auth = [VConsoleRedactor redact:@"Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.secret"];
+    VCTAssert([auth containsString:@"<redacted>"], "Redactor: Authorization 头被涂抹");
+    VCTAssert(![auth containsString:@"eyJhbGci"], "Redactor: token 明文不再出现");
+
+    // JSON 里的敏感键
+    NSString *json = [VConsoleRedactor redact:@"{\"access_token\":\"abc123\",\"user\":\"victor\"}"];
+    VCTAssert([json containsString:@"<redacted>"], "Redactor: JSON 敏感键被涂抹");
+    VCTAssert(![json containsString:@"abc123"], "Redactor: token 值不泄露");
+    VCTAssert([json containsString:@"\"user\":\"victor\""], "Redactor: 普通字段保留");
+
+    // 身份证号：保留前 6 后 4，中间掩码
+    NSString *idc = [VConsoleRedactor redact:@"身份证 11010519491231002X"];
+    VCTAssert([idc containsString:@"110105"], "Redactor: 身份证前 6 位保留");
+    VCTAssert([idc containsString:@"002X"], "Redactor: 身份证后 4 位保留");
+    VCTAssert(![idc containsString:@"19491231"], "Redactor: 身份证生日段被掩码");
+
+    // 银行卡号：保留前 4 后 4
+    NSString *bank = [VConsoleRedactor redact:@"卡号 6222021234567890123"];
+    VCTAssert(![bank containsString:@"1234567890"], "Redactor: 银行卡中间段被掩码");
+
+    // 关闭后原样返回
+    [VConsoleRedactor setEnabled:NO];
+    NSString *raw = [VConsoleRedactor redact:@"Authorization: Bearer secret"];
+    VCTAssert([raw containsString:@"Bearer secret"], "Redactor: 关闭后不脱敏");
+    [VConsoleRedactor setEnabled:YES];
+}
+
+static void testCrashReporter(void) {
+    // 开关与安装不应崩溃；安装后再次调用为幂等
+    [VConsoleCrashReporter setEnabled:YES];
+    VCTAssert([VConsoleCrashReporter isEnabled], "CrashReporter: 开关可读");
+    @try {
+        [VConsoleCrashReporter install];
+        [VConsoleCrashReporter install]; // 幂等第二次
+        [VConsoleCrashReporter replayLastCrashIfAny];
+        VCTAssert(YES, "CrashReporter: install/replay 不崩溃");
+    } @catch (NSException *e) {
+        VCTAssert(NO, "CrashReporter: install/replay 不应抛异常");
+    }
+}
+
 int main(int argc, char *argv[]) {
     @autoreleasepool {
         // simctl spawn 下 stdout 非 tty 为块缓冲，改为无缓冲便于实时观察进度
@@ -292,6 +339,8 @@ int main(int argc, char *argv[]) {
         testStorageInspector();
         testLoggerLevelFilter();
         testNetworkLoggerEmptyFilter();
+        testRedactor();
+        testCrashReporter();
         printf("\n%d passed, %d failed\n", g_passed, g_failed);
         return (g_failed == 0) ? 0 : 1;
     }
