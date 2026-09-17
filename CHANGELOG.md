@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.1] - 2026-09-17
+
+### 修复
+- **详情页查找条输入框不可见**：日志/网络/存储详情页点击「查找」后，搜索框宽度塌缩为 0、只剩放大镜图标。根因是 `VConsoleDetailViewController` 查找条约束链末端误用 `constraintLessThanOrEqualToAnchor`（≤），整条链右侧无锚点，而 UISearchBar 不报告固有宽度 → 输入框被解算为宽度 0。改为 `constraintEqualToAnchor`（=）后约束链左右两端闭合，搜索框吸收剩余宽度正常显示、可输入。
+
 ## [1.4.0] - 2026-09-17
 
 ### 新增

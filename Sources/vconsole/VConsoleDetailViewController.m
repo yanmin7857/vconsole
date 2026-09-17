@@ -132,7 +132,13 @@
     [prev.widthAnchor constraintEqualToConstant:34].active = YES;
     [prev.heightAnchor constraintEqualToConstant:34].active = YES;
     [next.leadingAnchor constraintEqualToAnchor:prev.trailingAnchor constant:2].active = YES;
-    [next.trailingAnchor constraintLessThanOrEqualToAnchor:_findBar.trailingAnchor constant:-6].active = YES;
+    // 关键修复：末端的 trailing 必须「等于」findBar 右边缘（原代码误用 <=，导致整条约束链
+    // 右侧没有锚点、查找条整体可向左滑动，而 UISearchBar 不报告 intrinsic 宽度，最终被解算为
+    // 宽度 0 —— 输入框塌缩、只剩放大镜图标。改为 = 后，next.trailing 被钉死，约束链在左右两端
+    // 同时闭合：searchBar.leading(0) 与 next.trailing(findBar.trailing-6) 之间的所有宽度被逐一推算
+    // 为定值（countLabel 取 max(固有宽度,44)，searchBar 吸收剩余空间），不再存在自由的未知量，
+    // 既无歧义也不会与 countLabel 争抢空间。
+    [next.trailingAnchor constraintEqualToAnchor:_findBar.trailingAnchor constant:-6].active = YES;
     [next.centerYAnchor constraintEqualToAnchor:_findBar.centerYAnchor].active = YES;
     [next.widthAnchor constraintEqualToConstant:34].active = YES;
     [next.heightAnchor constraintEqualToConstant:34].active = YES;
