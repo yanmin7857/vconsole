@@ -624,10 +624,14 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
                                  (long)(self.currentMatchRow + 1), (unsigned long)count];
     self.matchPrevButton.enabled = (self.currentMatchRow > 0);
     self.matchNextButton.enabled = (self.currentMatchRow < (NSInteger)count - 1);
-    if (self.scrollToCurrentOnNextUpdate) {
-        self.scrollToCurrentOnNextUpdate = NO;
-        [self scrollToCurrentMatchAnimated:NO];
-    } else if (self.currentMatchRow >= 0 && (NSUInteger)self.currentMatchRow < count) {
+        if (self.scrollToCurrentOnNextUpdate) {
+            self.scrollToCurrentOnNextUpdate = NO;
+            // 首次键入搜索词后，reloadData 布局尚未完成，延后到下一 runloop 再滚，
+            // 确保基于最新行高定位（与 next/prev 路径对称，避免首次滚动偶发落空）。
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self scrollToCurrentMatchAnimated:NO];
+            });
+        } else if (self.currentMatchRow >= 0 && (NSUInteger)self.currentMatchRow < count) {
         // 仅刷新当前行标记（不滚动），避免新日志到达时把浏览位置拉走
         [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:self.currentMatchRow inSection:0]]
                               withRowAnimation:UITableViewRowAnimationNone];
@@ -637,8 +641,10 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
 - (void)scrollToCurrentMatchAnimated:(BOOL)animated {
     if (self.currentMatchRow < 0 || (NSUInteger)self.currentMatchRow >= self.entries.count) return;
     NSIndexPath *ip = [NSIndexPath indexPathForRow:self.currentMatchRow inSection:0];
+    // 紧跟 reloadRowsAtIndexPaths / reloadData 后，UITableView 布局是延迟提交的；
+    // 先强制 flush，用最新行高（动态行高场景）算 contentSize，否则 scrollToRow 会滚到错误位置。
+    [self.tableView layoutIfNeeded];
     [self.tableView scrollToRowAtIndexPath:ip atScrollPosition:UITableViewScrollPositionMiddle animated:animated];
-    [self.tableView reloadRowsAtIndexPaths:@[ip] withRowAnimation:UITableViewRowAnimationNone];
 }
 
 - (void)gotoMatch:(NSInteger)delta {
@@ -655,7 +661,10 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
     [rows addObject:[NSIndexPath indexPathForRow:next inSection:0]];
     [self.tableView reloadRowsAtIndexPaths:rows withRowAnimation:UITableViewRowAnimationNone];
     VConsoleHapticLight();
-    [self scrollToCurrentMatchAnimated:YES];
+    // reload 后 contentSize 布局可能尚未刷新，延后到下一 runloop 再滚动，确保基于最新行高定位。
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self scrollToCurrentMatchAnimated:YES];
+    });
 }
 
 - (void)gotoMatchNext { [self gotoMatch:1]; }

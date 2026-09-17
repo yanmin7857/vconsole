@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.3] - 2026-09-17
+
+### 修复
+- **搜索结果滚动定位不准（有时滚不到）**：
+  - 列表（日志/网络面板）`scrollToCurrentMatchAnimated:` 在 `reloadRowsAtIndexPaths` / `reloadData` **之后立刻** `scrollToRowAtIndexPath`，但 UITableView 布局是延迟提交的，此刻 `contentSize` 还是旧布局（动态行高场景尤甚），导致偏移算错、滚动落空。现改为先 `layoutIfNeeded` 强制 flush 用最新行高，且 `gotoMatch`（上/下跳转）与首次键入搜索词的滚动都延后到下一 runloop（`dispatch_async`）再执行，确保基于最新布局定位。
+  - 详情页 find-in-page 的 `jumpToCurrent` 原先依赖 `UITextView` 不准的 `scrollRangeToVisible:`（不计入 `textContainerInset`、可视边缘附近直接不滚，还会被 `selectedRange` 的自动滚动覆盖）。现改为：强制 `ensureLayoutForTextContainer:` 后，取匹配起点字符的 caret 矩形**手动计算 offset** 并 `setContentOffset:`，再于下一 runloop 归位以覆盖系统自动滚动，保证当前匹配项精确停在可视区。
+- 验证：详情页量化断言 `match 0~6` 全部 `visible=1`（确认识别项在可视区）；列表 `next` 跳转 `contained=1`；单测 72/72。
+
 ## [1.4.2] - 2026-09-17
 
 ### 修复

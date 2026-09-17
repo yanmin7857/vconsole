@@ -353,8 +353,23 @@
 - (void)jumpToCurrent {
     if (self.currentMatch < 0 || self.currentMatch >= (NSInteger)self.matches.count) return;
     NSRange r = [self.matches[self.currentMatch] rangeValue];
-    [self.textView scrollRangeToVisible:r];
-    self.textView.selectedRange = r;
+    UITextView *tv = self.textView;
+    // 先设置选区触发高亮，随后强制布局并手动归位——替代不准的 scrollRangeToVisible:，
+    // 后者不计入 textContainerInset 且在可视边缘附近会直接不滚，还会被 selectedRange 的自动滚动覆盖。
+    tv.selectedRange = r;
+    [tv.layoutManager ensureLayoutForTextContainer:tv.textContainer];
+    // 取匹配起点字符的 caret 矩形（已含 textContainerInset），手动滚到该处上方留 8pt 余量。
+    UITextPosition *pos = [tv positionFromPosition:tv.beginningOfDocument offset:(NSInteger)r.location];
+    CGRect caret = [tv caretRectForPosition:pos];
+    CGFloat viewH = tv.bounds.size.height;
+    CGFloat contentH = tv.contentSize.height;
+    CGFloat targetY = caret.origin.y - 8.0;
+    CGFloat maxY = MAX(0.0, contentH - viewH + tv.contentInset.top + tv.contentInset.bottom);
+    targetY = MAX(0.0, MIN(targetY, maxY));
+    // 下一 runloop 再归位，覆盖 selectedRange 引发的系统自动滚动，保证停在精确位置。
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [tv setContentOffset:CGPointMake(0, targetY) animated:NO];
+    });
 }
 
 - (void)prevMatch {
