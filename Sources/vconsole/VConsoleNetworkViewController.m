@@ -25,6 +25,10 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
 @property (nonatomic, strong) VConsoleEmptyStateView *emptyView;
 @property (nonatomic, strong) NSArray<VConsoleNetworkEntry *> *entries;
 @property (nonatomic, copy) NSString *searchText;
+/// 搜索「含响应体」开关：默认关，开启后额外匹配 requestBody / responseBody（避免大 body 噪声与性能问题）
+@property (nonatomic, assign) BOOL searchIncludeBody;
+/// 「含响应体」搜索范围开关（chip 样式，置于筛选 chip 行末尾）
+@property (nonatomic, strong) UIButton *bodyScopeButton;
 /// 筛选模式：0 全部 1 仅失败 2 慢请求（阈值见 VConsoleSlowRequestThresholdMs()，设置页可调）
 @property (nonatomic, assign) NSInteger filterMode;
 /// 列表排序方式（持久化在 NSUserDefaults，默认按发生顺序）
@@ -56,7 +60,7 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
 
     // 搜索栏
     _searchBar = [[UISearchBar alloc] init];
-    _searchBar.placeholder = @"搜索 URL / 方法";
+    _searchBar.placeholder = @"搜索 URL / 方法 / 状态码";
     _searchBar.searchBarStyle = UISearchBarStyleMinimal;
     _searchBar.delegate = self;
     _searchBar.translatesAutoresizingMaskIntoConstraints = NO;
@@ -285,6 +289,23 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
         [buttons addObject:b];
     }
     _chipButtons = [buttons copy];
+
+    // 「含响应体」搜索范围开关：放在筛选 chip 行末尾。默认关，开启后额外匹配
+    // requestBody / responseBody（避免大 body 噪声与性能问题）。
+    _bodyScopeButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    _bodyScopeButton.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
+    _bodyScopeButton.layer.cornerRadius = 13;
+    _bodyScopeButton.layer.masksToBounds = YES;
+    _bodyScopeButton.contentEdgeInsets = UIEdgeInsetsMake(5, 12, 5, 12);
+    [_bodyScopeButton setTitle:@"含响应体" forState:UIControlStateNormal];
+    [_bodyScopeButton addTarget:self action:@selector(bodyToggleTapped:) forControlEvents:UIControlEventTouchUpInside];
+    _bodyScopeButton.translatesAutoresizingMaskIntoConstraints = NO;
+    _bodyScopeButton.isAccessibilityElement = YES;
+    _bodyScopeButton.accessibilityHint = @"轻点切换是否将请求体 / 响应体纳入搜索范围";
+    [_bodyScopeButton.heightAnchor constraintEqualToConstant:26].active = YES;
+    [_chipStack addArrangedSubview:_bodyScopeButton];
+    [self updateBodyScopeAppearance];
+
     [self updateChipAppearance];
 }
 
@@ -318,6 +339,24 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
     }
 }
 
+#pragma mark - 搜索范围（含响应体）
+
+- (void)bodyToggleTapped:(UIButton *)sender {
+    self.searchIncludeBody = !self.searchIncludeBody;
+    [self updateBodyScopeAppearance];
+    VConsoleHapticLight();
+    [self refresh];
+}
+
+- (void)updateBodyScopeAppearance {
+    BOOL on = self.searchIncludeBody;
+    _bodyScopeButton.backgroundColor = on ? VConsoleOrangeColor() : VConsoleSecondarySystemFillColor();
+    [_bodyScopeButton setTitleColor:on ? [UIColor whiteColor] : VConsoleLabelColor() forState:UIControlStateNormal];
+    _bodyScopeButton.accessibilityLabel = on ? @"搜索包含响应体，已开启" : @"搜索包含响应体，已关闭";
+    _bodyScopeButton.accessibilityTraits = on ? (UIAccessibilityTraitButton | UIAccessibilityTraitSelected)
+                                             : UIAccessibilityTraitButton;
+}
+
 /// 单条记录是否命中当前筛选模式
 - (BOOL)entryMatchesFilter:(VConsoleNetworkEntry *)e {
     switch (self.filterMode) {
@@ -335,13 +374,23 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
     BOOL hasFilter = (self.filterMode > 0 || self.searchText.length > 0);
     if (!hasFilter) return all;
     NSString *q = self.searchText;
+    BOOL includeBody = self.searchIncludeBody;
     NSMutableArray *out = [NSMutableArray arrayWithCapacity:all.count];
     for (VConsoleNetworkEntry *e in all) {
         if (![self entryMatchesFilter:e]) continue;
-        if (q.length > 0 &&
-            [e.url rangeOfString:q options:NSCaseInsensitiveSearch].location == NSNotFound &&
-            [e.method rangeOfString:q options:NSCaseInsensitiveSearch].location == NSNotFound &&
-            (e.error.length == 0 || [e.error rangeOfString:q options:NSCaseInsensitiveSearch].location == NSNotFound)) continue;
+        if (q.length > 0) {
+            // 默认搜 url / method / error / statusCode；开启「含响应体」后额外搜 requestBody / responseBody。
+            BOOL hit = ([e.url rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound)
+                || ([e.method rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound)
+                || (e.error.length > 0 && [e.error rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound)
+                || ([[NSString stringWithFormat:@"%ld", (long)e.statusCode] rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound);
+            if (includeBody) {
+                hit = hit
+                    || (e.requestBody.length > 0 && [e.requestBody rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound)
+                    || (e.responseBody.length > 0 && [e.responseBody rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound);
+            }
+            if (!hit) continue;
+        }
         [out addObject:e];
     }
     return out;

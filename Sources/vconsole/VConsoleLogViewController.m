@@ -64,7 +64,7 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
 
     // 搜索栏
     _searchBar = [[UISearchBar alloc] init];
-    _searchBar.placeholder = @"搜索日志内容";
+    _searchBar.placeholder = @"搜索 内容 / 文件 / 函数";
     _searchBar.searchBarStyle = UISearchBarStyleMinimal;
     _searchBar.delegate = self;
     _searchBar.translatesAutoresizingMaskIntoConstraints = NO;
@@ -326,8 +326,15 @@ static const NSTimeInterval kVConsoleSearchDebounceInterval = 0.15;
     NSMutableArray *out = [NSMutableArray arrayWithCapacity:all.count];
     for (VConsoleLogEntry *e in all) {
         if (lvl >= 0 && e.level != lvl) continue;
-        if (q.length > 0 &&
-            [e.message rangeOfString:q options:NSCaseInsensitiveSearch].location == NSNotFound) continue;
+        if (q.length > 0) {
+            // P0-1：除 message 外，对 file / function / line 也做 OR 匹配，
+            // 便于按源码定位（"哪个文件/函数打的这条"）反查日志。
+            BOOL hit = ([e.message rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound)
+                || (e.file && [e.file rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound)
+                || (e.function && [e.function rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound)
+                || ([[NSString stringWithFormat:@"%ld", (long)e.line] rangeOfString:q options:NSCaseInsensitiveSearch].location != NSNotFound);
+            if (!hit) continue;
+        }
         [out addObject:e];
     }
     return out;
