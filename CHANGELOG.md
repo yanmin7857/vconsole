@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.2] - 2026-09-17
+
+### 修复
+- **不再吞掉 Xcode 控制台日志**：`[VConsole start]` 默认会把进程 `stderr` 用 `dup2` 重定向到内部管道以捕获 `NSLog` / `fprintf`，但读线程只把日志存进面板、不写回原 `stderr`，导致 Xcode 控制台看不到任何 `NSLog` 输出。现改为捕获的同时把原始行 **tee 写回真实 `stderr`**（Xcode 控制台照常可见），面板也照常收集。
+- **新增关闭开关**：暴露 `[VConsole setCaptureStderrEnabled:NO]`（底层 `VConsoleLogger` 的 `setCaptureStderrEnabled:` / `stopCapturingStderr`）。设为 NO 会恢复真实 `stderr`、Xcode 控制台恢复，但面板不再收集 `NSLog`。默认仍为 YES（捕获 + tee）。
+
 ## [1.4.1] - 2026-09-17
 
 ### 修复

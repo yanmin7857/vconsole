@@ -24,7 +24,16 @@ extern NSString *const VConsoleLoggerDidClearNotification;
 
 - (void)clear;
 /// 重定向 stderr，使 NSLog / fprintf 也能进入面板（类似 vConsole 捕获 console）。幂等，可安全多次调用。
+/// 捕获的同时会把原始行写回真实 stderr，因此 Xcode 控制台仍能看到 NSLog 输出。
 - (void)startCapturingStderr;
+/// 是否正在捕获 stderr。
+- (BOOL)isCapturingStderr;
+/// 开关：是否把 NSLog / fprintf(stderr) 捕获进面板（默认 YES）。
+/// 设为 NO 会恢复真实 stderr——Xcode 控制台恢复，但面板不再收 NSLog。
+/// 设为 YES 等价于 startCapturingStderr（幂等）。
+- (void)setCaptureStderrEnabled:(BOOL)enabled;
+/// 当前开关状态。
+- (BOOL)captureStderrEnabled;
 /// 导出全部日志为纯文本。
 - (NSString *)exportAsString;
 

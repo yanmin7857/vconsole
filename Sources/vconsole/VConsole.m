@@ -90,7 +90,10 @@ static __strong VConsoleFloatingButton *gVConsoleFab = nil;
     }
     // WKWebView 网络监控（JS 钩子）跟随抓包开关启停，之后新建的 WebView 自动生效
     [VConsoleWebViewMonitor attach];
-    [[VConsoleLogger shared] startCapturingStderr];
+    // 仅在开关开启时捕获 stderr（默认开启）；关闭后 Xcode 控制台恢复
+    if ([[VConsoleLogger shared] captureStderrEnabled]) {
+        [[VConsoleLogger shared] startCapturingStderr];
+    }
 
     // 进阶能力：读取持久化开关并生效
     [VConsoleRedactor setEnabled:[defaults boolForKey:VConsoleDefaultsKeyRedactionEnabled]];
@@ -151,6 +154,10 @@ static __strong VConsoleFloatingButton *gVConsoleFab = nil;
 + (void)setShakeToToggleEnabled:(BOOL)enabled {
     [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:VConsoleDefaultsKeyShakeEnabled];
     if (enabled) [self vconsole_installShake];
+}
+
++ (void)setCaptureStderrEnabled:(BOOL)enabled {
+    [[VConsoleLogger shared] setCaptureStderrEnabled:enabled];
 }
 
 #pragma mark - 摇一摇唤起（swizzle UIWindow 的 motionEnded:）

@@ -30,6 +30,8 @@ static NSString *vconsoleStripNSLogPrefix(NSString *line) {
 
 @interface VConsoleLogger () {
     int _logPipe[2];
+    int _savedStderrFD;     // 真实 stderr 备份 fd（start 时 dup，stop 时 dup2 恢复）
+    BOOL _captureEnabled;   // 捕获开关（默认 YES）
 }
 @property (nonatomic, strong) dispatch_queue_t queue;
 @property (nonatomic, strong) NSMutableArray<VConsoleLogEntry *> *entries;
@@ -60,6 +62,8 @@ static NSString *vconsoleStripNSLogPrefix(NSString *line) {
         _entries = [NSMutableArray array];
         _pendingEntries = [NSMutableArray array];
         _stderrCaptured = NO;
+        _savedStderrFD = -1;
+        _captureEnabled = YES;
         // 恢复上次的级别过滤设置
         _levelFilter = (VConsoleLogLevel)[[NSUserDefaults standardUserDefaults] integerForKey:VConsoleDefaultsKeyLevelFilter];
     }
@@ -173,9 +177,10 @@ static NSString *vconsoleStripNSLogPrefix(NSString *line) {
     }
 
     // 保存原 stderr：读取端创建失败时必须恢复，否则业务 NSLog 写满 64KB pipe 后永久阻塞
-    int savedStderr = dup(STDERR_FILENO);
+    _savedStderrFD = dup(STDERR_FILENO);
     if (pipe(_logPipe) != 0) {
-        if (savedStderr >= 0) close(savedStderr);
+        if (_savedStderrFD >= 0) close(_savedStderrFD);
+        _savedStderrFD = -1;
         return;
     }
     dup2(_logPipe[1], STDERR_FILENO);
@@ -188,7 +193,7 @@ static NSString *vconsoleStripNSLogPrefix(NSString *line) {
         FILE *stream = fdopen(self->_logPipe[0], "r");
         if (!stream) {
             // 打开读取端失败：恢复原 stderr，保证业务日志仍能正常输出
-            if (savedStderr >= 0) { dup2(savedStderr, STDERR_FILENO); close(savedStderr); }
+            if (self->_savedStderrFD >= 0) { dup2(self->_savedStderrFD, STDERR_FILENO); close(self->_savedStderrFD); }
             close(self->_logPipe[0]);
             return;
         }
@@ -196,6 +201,8 @@ static NSString *vconsoleStripNSLogPrefix(NSString *line) {
         size_t len = 0;
         ssize_t n;
         while ((n = getline(&line, &len, stream)) > 0) {
+            // tee：把原始行（含系统前缀与换行）原样写回真实 stderr，Xcode 控制台照常可见
+            if (self->_savedStderrFD >= 0) write(self->_savedStderrFD, line, n);
             NSString *text = [[NSString alloc] initWithBytes:line
                                                        length:n
                                                      encoding:NSUTF8StringEncoding];
@@ -212,8 +219,41 @@ static NSString *vconsoleStripNSLogPrefix(NSString *line) {
         free(line);
         fclose(stream);
         // 读取循环退出（进程关闭前的极端场景）：同样恢复，避免留下死管道
-        if (savedStderr >= 0) { dup2(savedStderr, STDERR_FILENO); close(savedStderr); }
+        if (self->_savedStderrFD >= 0) { dup2(self->_savedStderrFD, STDERR_FILENO); close(self->_savedStderrFD); }
     });
+}
+
+- (BOOL)isCapturingStderr {
+    return _stderrCaptured;
+}
+
+- (BOOL)captureStderrEnabled {
+    return _captureEnabled;
+}
+
+- (void)setCaptureStderrEnabled:(BOOL)enabled {
+    @synchronized (self) {
+        _captureEnabled = enabled;
+    }
+    if (enabled) {
+        [self startCapturingStderr];
+    } else {
+        [self stopCapturingStderr];
+    }
+}
+
+- (void)stopCapturingStderr {
+    @synchronized (self) {
+        if (!_stderrCaptured) return;
+        _stderrCaptured = NO;
+    }
+    // 把 fd 2 指回真实 stderr 并关闭备份 fd；pipe 写端在 start 时已 close，
+    // 读线程 getline 读到 EOF 后自行 fclose 退出，业务 NSLog 直接落回真实 stderr。
+    if (_savedStderrFD >= 0) {
+        dup2(_savedStderrFD, STDERR_FILENO);
+        close(_savedStderrFD);
+        _savedStderrFD = -1;
+    }
 }
 
 @end

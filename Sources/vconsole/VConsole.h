@@ -72,6 +72,9 @@ typedef NS_ENUM(NSInteger, VConsolePanelTab) {
 + (void)setCrashReportingEnabled:(BOOL)enabled;
 /// 摇一摇唤起/收起面板（默认关闭）。开启后在任意可响应摇动的 window 上摇动设备即可切换面板。
 + (void)setShakeToToggleEnabled:(BOOL)enabled;
+/// 是否把 NSLog / fprintf(stderr) 捕获进日志面板（默认 YES）。
+/// 设为 NO 会恢复真实 stderr——Xcode 控制台恢复输出，但面板不再收集 NSLog。
++ (void)setCaptureStderrEnabled:(BOOL)enabled;
 
 @end
 
