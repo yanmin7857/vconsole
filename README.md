@@ -6,7 +6,8 @@
   <img src="assets/demo.gif" width="320" alt="vconsole-ios 演示">
   <br>
   <sub>演示：日志（原生分级着色）→ 网络（真实请求 + JSON 美化）→ 存储 → 系统 →
-  WKWebView 内 H5 <code>console.*</code> 捕获（日志面板「· H5」前缀）→ H5 请求捕获（网络面板「· H5」标记）</sub>
+  WKWebView 内 H5 <code>console.*</code> 捕获（日志面板「· H5」前缀）→ H5 请求捕获（网络面板「· H5」标记）→
+  WebView 面板（对 H5 页面执行 JS / 操作 DOM）</sub>
 </p>
 
 ## 特性
