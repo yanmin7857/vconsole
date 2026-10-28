@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'VConsole'
-  s.version          = '1.0.0'
+  s.version          = '1.5.0'
   s.summary          = 'vConsole 风格的 iOS 原生调试面板（Objective-C）。'
 
   s.description      = <<-DESC
@@ -9,6 +9,7 @@ Pod::Spec.new do |s|
   * 网络面板：NSURLProtocol 全局抓包 + WKWebView 页面内 fetch/XHR 捕获（JS 钩子自动注入），记录请求/响应头、Body、状态码、耗时，可开关
   * 存储面板：UserDefaults 键值查看、沙盒文件浏览（搜索 + 文本预览）
   * 系统面板：设备/系统/磁盘/电量等信息
+  * WebView 面板：自动发现存活 WKWebView，对 H5 页面执行任意 JS / 操作 DOM（查询·高亮元素）、清缓存
   * 一行接入：[VConsole attachToWindow:window]；DEBUG 构建生效，Release 自动零开销
   DESC
 
