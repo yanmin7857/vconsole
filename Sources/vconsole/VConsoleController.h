@@ -12,7 +12,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)toggle;
 @property (nonatomic, assign, readonly) BOOL isVisible;
 
-/// 切换面板 Tab：0 日志 / 1 网络 / 2 存储 / 3 系统。
+/// 切换面板 Tab：0 日志 / 1 网络 / 2 存储 / 3 系统 / 4 WebView。
 /// 会自动创建面板（首次调用即触发懒加载），越界索引忽略；不改变面板可见性。
 - (void)selectPanelTab:(NSInteger)index;
 

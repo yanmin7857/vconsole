@@ -6,14 +6,15 @@
 #import "VConsoleNetworkViewController.h"
 #import "VConsoleStorageViewController.h"
 #import "VConsoleSystemViewController.h"
+#import "VConsoleWebViewController.h"
 #import "VConsoleSettingsViewController.h"
 #import "VConsoleLogger.h"
 #import "VConsoleNetworkLogger.h"
 #import "VConsoleLogEntry.h"
 #import "VConsoleNetworkEntry.h"
 
-static NSString * const kVConsoleTabTitles[] = { @"日志", @"网络", @"存储", @"系统" };
-static const NSInteger kVConsoleTabCount = 4;
+static NSString * const kVConsoleTabTitles[] = { @"日志", @"网络", @"存储", @"系统", @"WebView" };
+static const NSInteger kVConsoleTabCount = 5;
 
 /// 面板最小高度：比例下限与绝对下限取较大者。
 ///
@@ -157,7 +158,8 @@ static inline CGFloat VConsoleMinPanelHeight(CGFloat H) {
     VConsoleNetworkViewController *net = [[VConsoleNetworkViewController alloc] init];
     VConsoleStorageViewController *store = [[VConsoleStorageViewController alloc] init];
     VConsoleSystemViewController *sys = [[VConsoleSystemViewController alloc] init];
-    _tabs = @[log, net, store, sys];
+    VConsoleWebViewController *web = [[VConsoleWebViewController alloc] init];
+    _tabs = @[log, net, store, sys, web];
 
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self
                                                                           action:@selector(panelPanned:)];

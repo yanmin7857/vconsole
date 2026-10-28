@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.5.0] - 2026-10-28
+
+### 新增
+- **WebView 面板（第 5 个 Tab）**：自动列出存活的 WKWebView（`attach` 之后经 `initWithFrame:configuration:` 创建的实例由初始化 swizzle 登记，弱引用、业务零改动，且不依赖「网络抓包」开关），切换目标后可：
+  - **执行任意 JS 操作 DOM**：输入框回车执行，结果 / 错误打印到输出区（JS 返回值自动字符串化并 JSON 美化，超 20000 字符截断）
+  - **快捷操作**：页面信息 / 取 HTML / 取文本 / 查询选择器（返回命中数与首个元素 `outerHTML` 片段）/ 高亮元素 / 取消高亮（`2px solid #e35d5d` 描边，可随时清除）
+  - **清缓存**（整站共享 `WKWebsiteDataStore`）：全部网站数据（含 Cookie）/ 仅缓存（保留 Cookie 登录态）/ 仅 Cookie（保留缓存）
+- 新增 `VConsolePanelTabWebView`（tab 值 4），`selectPanelTab:` 与键盘 `⌘5` 均可切到该面板。
+- 新增类：`VConsoleWebInspector`（实例跟踪 + JS 执行 + 缓存清理）、`VConsoleWebViewController`（面板 UI）。
+
+### 变更
+- `VConsoleWebViewMonitor`：初始化 swizzle 由「跟随网络抓包开关启停」改为 `attach` 时**常驻**，是否注入 H5 钩子改由初始化时读取开关决定（关闭抓包时新建的 WebView 仍不注入，行为与原先一致）；swizzle 内同时登记 WebView 实例，供 WebView 面板列出目标。
+
+### 验证
+- Demo `-vcsDemo` 时间轴新增 20.6s 切到 WebView Tab；Maestro 端到端跑通：查询 `.item` → `匹配 3 个元素`、执行 `document.title='vcs-dom-ok'` 生效、高亮 `.item` 后关闭面板可见页面元素红色描边、页面信息与「仅缓存」清理均返回预期结果；单测 72/72。
+
 ## [1.4.3] - 2026-09-17
 
 ### 修复

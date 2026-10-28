@@ -1,6 +1,6 @@
 # vconsole-ios
 
-仿 H5 vConsole 的 iOS 原生调试面板（Objective-C）。一个悬浮球 + 四个面板（日志 / 网络 / 存储 / 系统）+ 内置本地 Mock，零业务侵入，仅 DEBUG 生效。
+仿 H5 vConsole 的 iOS 原生调试面板（Objective-C）。一个悬浮球 + 五个面板（日志 / 网络 / 存储 / 系统 / WebView）+ 内置本地 Mock，零业务侵入，仅 DEBUG 生效。
 
 <p align="center">
   <img src="assets/demo.gif" width="320" alt="vconsole-ios 演示">
@@ -36,10 +36,16 @@
 **系统**
 - 设备型号、系统版本、屏幕、内存、电量（实时监控）等信息
 
+**WebView**
+- 自动列出存活的 WKWebView（初始化 swizzle 登记，业务零改动），可切换目标
+- 在页面内执行任意 JS 操作 DOM；快捷操作：页面信息 / 取 HTML / 取文本 /
+  查询选择器 / 高亮元素 / 取消高亮
+- 一键清理缓存：全部网站数据 / 仅缓存（保留 Cookie）/ 仅 Cookie，详见下文
+
 **交互**
 - 悬浮球：拖拽边缘吸附、位置持久化、长按菜单、闲置半透明、键盘避让
 - 面板：弹簧开合动画、grabber 拖拽调高（比例持久化）、Tab 角标
-- iPad：面板居中卡片布局 + 外接键盘快捷键（`Cmd+1~4` 切 Tab、`Esc` 关闭、`Cmd+F` 搜索）
+- iPad：面板居中卡片布局 + 外接键盘快捷键（`Cmd+1~5` 切 Tab、`Esc` 关闭、`Cmd+F` 搜索）
 - 全局 toast/空态/触觉反馈；设置持久化（主题/级别过滤/抓包开关/Mock 开关）
 
 ## 进阶能力
@@ -115,7 +121,7 @@ VConsoleLogger.shared().log(VConsoleLogLevel.info, message: "hello from Swift",
 [VConsole show];
 [VConsole hide];
 [VConsole toggle];
-[VConsole selectPanelTab:VConsolePanelTabNetwork];   // 0 日志 / 1 网络 / 2 存储 / 3 系统
+[VConsole selectPanelTab:VConsolePanelTabNetwork];   // 0 日志 / 1 网络 / 2 存储 / 3 系统 / 4 WebView
 ```
 
 `selectPanelTab:` 只切换 Tab、不改变面板显示状态，典型用途是在自动化演示 / 回归测试里
@@ -180,7 +186,34 @@ info 灰、warn 橙、error 红）与原生日志区分，完整对标 Web 版 v
 > xcrun simctl io booted recordVideo demo.mp4    # 录约 22s 后 Ctrl-C 停止
 > ```
 > 演示顺序：日志（原生分级）→ 网络（真实请求）→ 存储 → 系统 → H5 页面 →
-> H5 `console.*` 捕获 → H5 请求捕获，全程自动切 Tab，靠 `+selectPanelTab:` 驱动。
+> H5 `console.*` 捕获 → H5 请求捕获 → WebView 面板，全程自动切 Tab，靠 `+selectPanelTab:` 驱动。
+>
+> 时间轴：2.0 清噪声/发请求 → 2.6 分级日志 → 3.2 日志 → 6.2 网络 → 9.0 存储 →
+> 10.8 系统 → 12.6 收起 → 13.2 进 H5 页 → 14.8 H5 console → 16.2 日志 →
+> 18.6 网络 → 20.6 WebView。
+
+## WebView 面板（DOM 操作 + 缓存管理）
+
+面板列出**当前存活的 WKWebView**（由 `WKWebView` 初始化 swizzle 自动登记，业务零改动，
+与「网络抓包」开关无关），选中目标后：
+
+- **执行 JS**：底部输入框输入任意 JS 回车执行，结果（或错误）打印到输出区（JS 返回值
+  自动字符串化，超 20000 字符截断）。这是最通用的能力——改样式、改文案、注入脚本都能做
+- **快捷操作 chips**：
+  - 页面信息：`title` / `url` / `readyState` / 元素总数
+  - 取 HTML / 取文本：`documentElement.outerHTML` / `body.innerText`
+  - 查询选择器：输入 CSS 选择器，返回匹配数量与首个元素的 `outerHTML` 片段
+  - 高亮元素 / 取消高亮：给匹配元素加 `2px solid #e35d5d` 描边（便于定位），随时可清除
+- **清缓存**：整站共享一个 `WKWebsiteDataStore`，三档可选
+  - 全部网站数据（含 Cookie，等同退出登录）
+  - 仅缓存（DiskCache / MemoryCache / OfflineWebApplicationCache，保留 Cookie / 登录态）
+  - 仅 Cookie（保留缓存）
+
+限制：实例跟踪只覆盖 `attach` 之后经 `initWithFrame:configuration:` 创建的 WebView
+（Storyboard `initWithCoder:` 等路径不生效）；已释放的 WebView 会从列表自动移除。
+
+验证方式：运行 Demo → 主页「WKWebView H5 测试」→ 回 vConsole「WebView」面板，
+点「查询选择器」输入 `.item` 或点「高亮元素」，即可看到页面元素被定位/描边。
 
 ## 本地 Mock
 

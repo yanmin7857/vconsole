@@ -7,6 +7,7 @@
 // 空源页面可以读到响应体；example.com 无 CORS 头，用于演示跨域拦截路径。
 static NSString *const kDemoHTML =
     @"<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"
+    @"<title>WKWebView H5 控制台</title>"
     @"<style>body{font-family:-apple-system;padding:16px;background:#fff;color:#111}"
     @"h3{margin:18px 0 8px;font-size:16px}"
     @"button{display:block;width:100%;padding:12px;margin:8px 0;font-size:16px;"
@@ -29,6 +30,13 @@ static NSString *const kDemoHTML =
     @"<button class='err' onclick='fireError()'>console.error</button>"
     @"<button onclick='fireObj()'>console.log（对象 / 数组）</button>"
     @"<button onclick='fireAll()'>全部级别各打一条</button>"
+    @"<h3>DOM 操作测试</h3>"
+    @"<p style='font-size:14px;color:#666'>回 vConsole「WebView」面板，可查询/高亮下列元素，或直接执行 JS 改页面。</p>"
+    @"<div class='box' style='padding:10px;border:1px solid #ddd;border-radius:8px;margin:6px 0'>"
+    @"<p class='item' style='margin:4px 0'>可操作元素 #1</p>"
+    @"<p class='item' style='margin:4px 0'>可操作元素 #2</p>"
+    @"<p class='item' style='margin:4px 0'>可操作元素 #3</p>"
+    @"</div>"
     @"<div id='out'></div>"
     @"<script>"
     @"function out(t){document.getElementById('out').textContent=String(t)}"

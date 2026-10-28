@@ -23,14 +23,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// 若只在 .m 的类扩展里声明，公开的 VConsoleWebViewMonitor * 类型不匹配协议会告警。
 @interface VConsoleWebViewMonitor : NSObject <WKScriptMessageHandler>
 
-/// 由 VConsole attach 时调用：抓包开启则挂上 swizzle，
-/// 并跟随「网络抓包」开关动态启停。重复调用安全。
+/// 由 VConsole attach 时调用：挂上初始化 swizzle（幂等）。
+/// swizzle 常驻，与「网络抓包」开关无关——它同时负责两件事：
+///  1) 抓包开启时向 WebView 注入 JS 钩子（hook XHR/fetch/console）；
+///  2) 无论开关状态，把创建出的 WebView 登记进 VConsoleWebInspector，
+///     供「WebView」面板列出目标并执行 JS（操作 DOM）。
 + (void)attach;
 
 /// 挂上 WKWebView 初始化 swizzle（幂等）。已创建的 WebView 不受影响。
 + (void)start;
-/// 还原 swizzle（幂等）。已注入脚本的页面仍会回传消息，
-/// 由消息入口的运行时开关检查放行。
+/// 还原 swizzle（幂等），同时停止 WebView 实例跟踪与后续注入。
+/// 一般无需调用（面板依赖跟踪常驻）。
 + (void)stop;
 
 /// JS 消息回传的接收者（单例，被各 userContentController 持有）。

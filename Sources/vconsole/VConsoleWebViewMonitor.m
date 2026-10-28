@@ -5,6 +5,7 @@
 
 #import "VConsoleNetworkLogger.h"
 #import "VConsoleLogger.h"
+#import "VConsoleWebInspector.h"
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 
@@ -139,26 +140,37 @@ static BOOL sVConsoleSwizzled = NO; // swizzle 状态（交换是对合操作，
 
 @implementation WKWebView (VConsoleAutoHook)
 
-// 交换后的 initWithFrame:configuration: 入口：向 configuration 的
-// userContentController 注入钩子脚本与消息通道（同一 UCC 被多个 WebView
-// 共享时只注入一次），随后调用原实现。initWithFrame: 便捷初始化器
-// 内部也会走到指定初始化器，同样被覆盖。
+// 交换后的 initWithFrame:configuration: 入口：
+//  1) 「网络抓包」开启时，向 configuration 的 userContentController 注入钩子脚本与消息通道
+//     （同一 UCC 被多个 WebView 共享时只注入一次）；
+//  2) 无论开关状态，都把创建出的 WebView 登记进 VConsoleWebInspector，
+//     供「WebView」面板列出目标并执行 JS/操作 DOM。
+// 随后调用原实现。initWithFrame: 便捷初始化器内部也会走到指定初始化器，同样被覆盖。
 - (instancetype)vconsole_initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
     @try {
-        WKUserContentController *ucc = configuration.userContentController;
-        if (ucc && !objc_getAssociatedObject(ucc, &sVConsoleDidHookUCCKey)) {
-            objc_setAssociatedObject(ucc, &sVConsoleDidHookUCCKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            WKUserScript *script = [[WKUserScript alloc] initWithSource:sVConsoleHookJS
-                                                           injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                                                        forMainFrameOnly:NO];
-            [ucc addUserScript:script];
-            [ucc addScriptMessageHandler:[VConsoleWebViewMonitor shared] name:@"vconsoleNet"];
-            [ucc addScriptMessageHandler:[VConsoleWebViewMonitor shared] name:@"vconsoleLog"];
+        if ([[VConsoleNetworkLogger shared] isEnabled]) {
+            WKUserContentController *ucc = configuration.userContentController;
+            if (ucc && !objc_getAssociatedObject(ucc, &sVConsoleDidHookUCCKey)) {
+                objc_setAssociatedObject(ucc, &sVConsoleDidHookUCCKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                WKUserScript *script = [[WKUserScript alloc] initWithSource:sVConsoleHookJS
+                                                               injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                            forMainFrameOnly:NO];
+                [ucc addUserScript:script];
+                [ucc addScriptMessageHandler:[VConsoleWebViewMonitor shared] name:@"vconsoleNet"];
+                [ucc addScriptMessageHandler:[VConsoleWebViewMonitor shared] name:@"vconsoleLog"];
+            }
         }
     } @catch (NSException *e) {
         // 注入失败不影响 WebView 正常创建
     }
-    return [self vconsole_initWithFrame:frame configuration:configuration];
+    id webView = [self vconsole_initWithFrame:frame configuration:configuration];
+    @try {
+        if ([webView isKindOfClass:[WKWebView class]]) {
+            [VConsoleWebInspector registerWebView:webView]; // 实例跟踪，与抓包开关无关
+        }
+    } @catch (NSException *e) {
+    }
+    return webView;
 }
 
 @end
@@ -183,20 +195,9 @@ static BOOL sVConsoleSwizzled = NO; // swizzle 状态（交换是对合操作，
     static BOOL didAttach = NO;
     if (didAttach) return;
     didAttach = YES;
-    if ([[VConsoleNetworkLogger shared] isEnabled]) [self start];
-    // 跟随「网络抓包」开关动态启停（通知派发在主线程）
-    [[NSNotificationCenter defaultCenter] addObserver:[self shared]
-                                             selector:@selector(onToggle:)
-                                                 name:VConsoleNetworkLoggerDidToggleNotification
-                                               object:nil];
-}
-
-- (void)onToggle:(NSNotification *)n {
-    if ([n.object boolValue]) {
-        [VConsoleWebViewMonitor start];
-    } else {
-        [VConsoleWebViewMonitor stop];
-    }
+    // 始终安装 swizzle：WebView 实例跟踪（供「WebView」面板）不依赖抓包开关；
+    // 是否注入 JS 钩子由初始化时读取的「网络抓包」开关决定，故无需再跟随开关启停 swizzle。
+    [self start];
 }
 
 + (void)start {
@@ -208,7 +209,7 @@ static BOOL sVConsoleSwizzled = NO; // swizzle 状态（交换是对合操作，
     if (!orig || !mine) return;
     method_exchangeImplementations(orig, mine);
     sVConsoleSwizzled = YES;
-    VConsoleLogI(@"[vConsole] WKWebView 网络监控已开启（attach 之后新建的 WebView 自动生效）");
+    VConsoleLogI(@"[vConsole] WKWebView 监控已开启（attach 之后新建的 WebView 自动纳入「WebView」面板）");
 }
 
 + (void)stop {

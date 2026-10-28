@@ -35,6 +35,7 @@ typedef NS_ENUM(NSInteger, VConsolePanelTab) {
     VConsolePanelTabNetwork = 1,    ///< 网络
     VConsolePanelTabStorage = 2,    ///< 存储
     VConsolePanelTabSystem = 3,     ///< 系统
+    VConsolePanelTabWebView = 4,    ///< WebView（执行 JS / 操作 DOM / 清缓存）
 };
 
 /// vConsole 统一入口。

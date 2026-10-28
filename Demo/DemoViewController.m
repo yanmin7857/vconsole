@@ -244,6 +244,7 @@
     //  14.8  触发页面内 console.log/info/debug/warn/error
     //  16.2  回面板 → 日志 Tab 看「· H5」记录
     //  18.6  切到 网络 Tab 看 H5 请求记录
+    //  20.6  切到 WebView Tab（对 H5 页面执行 JS / 操作 DOM / 清缓存）
     void (^at)(double, dispatch_block_t) = ^(double t, dispatch_block_t block) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(t * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), block);
@@ -277,6 +278,7 @@
         [VConsole selectPanelTab:VConsolePanelTabLog];
     });
     at(18.6, ^{ [VConsole selectPanelTab:VConsolePanelTabNetwork]; });
+    at(20.6, ^{ [VConsole selectPanelTab:VConsolePanelTabWebView]; });
 }
 
 @end
